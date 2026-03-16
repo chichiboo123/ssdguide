@@ -1,0 +1,31 @@
+{
+  "스키마": {
+    "필드": {
+      "코드": "성취기준 코드 (예: 2바생01-01)",
+      "내용": "성취기준 내용",
+      "교육과정": "적용 교육과정",
+      "학년군": "학년군",
+      "교과": "교과 분류",
+      "과목": "과목명",
+      "영역": "영역 (해당사항 없으면 null)"
+    }
+  },
+  "파일_설명": {
+    "achievements-all.json": "모든 교육과정을 계층적 구조로 포함한 통합 데이터",
+    "achievements-2022-개정.json": "2022 개정교육과정만 포함",
+    "achievements-2022-개정-특수.json": "2022 개정 특수교육과정만 포함",
+    "achievements-2019-누리과정.json": "2019 누리교육과정만 포함",
+    "achievements-simple.json": "모든 데이터를 단순 배열로 정렬 (필터링/검색에 최적화)"
+  },
+  "통계": {
+    "2022 개정": 2626,
+    "2022 개정 특수": 688,
+    "2019 누리과정": 59,
+    "합계": 3373
+  },
+  "사용_예시": {
+    "Node.js": "const achievements = require(\"./achievements-simple.json\");",
+    "JavaScript": "fetch(\"./achievements-simple.json\").then(r => r.json())",
+    "Python": "import json; data = json.load(open(\"achievements-simple.json\"))"
+  }
+}
