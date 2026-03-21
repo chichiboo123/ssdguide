@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
 import {
   Dialog,
   DialogContent,
@@ -12,12 +13,28 @@ import { useBasket } from "@/hooks/use-basket"
 import { useToast } from "@/hooks/use-toast"
 import type { BasketItem } from "@/lib/types"
 
+function loadFilterState() {
+  try {
+    const stored = localStorage.getItem(FILTER_STORAGE_KEY)
+    return stored ? JSON.parse(stored) : null
+  } catch {
+    return null
+  }
+}
+
+function saveFilterState(state: Record<string, string>) {
+  try {
+    localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(state))
+  } catch { /* ignore */ }
+}
+
 export default function HomePage() {
   const { items: basketItems, addItem, removeItem, reorderItems, clearBasket, isInBasket } = useBasket()
   const { toast } = useToast()
 
   const [showClearDialog, setShowClearDialog] = useState(false)
   const [basketOpen, setBasketOpen] = useState(false)
+  const [displayCount, setDisplayCount] = useState(PAGE_SIZE)
 
   const addedCodes = new Set(basketItems.map((b) => b.코드))
 
@@ -37,16 +54,16 @@ export default function HomePage() {
 
   const handleMoveUp = useCallback((index: number) => {
     if (index === 0) return
-    const newItems = [...basketItems]
-    ;[newItems[index - 1], newItems[index]] = [newItems[index], newItems[index - 1]]
-    reorderItems(newItems)
+    const n = [...basketItems]
+    ;[n[index - 1], n[index]] = [n[index], n[index - 1]]
+    reorderItems(n)
   }, [basketItems, reorderItems])
 
   const handleMoveDown = useCallback((index: number) => {
     if (index === basketItems.length - 1) return
-    const newItems = [...basketItems]
-    ;[newItems[index], newItems[index + 1]] = [newItems[index + 1], newItems[index]]
-    reorderItems(newItems)
+    const n = [...basketItems]
+    ;[n[index], n[index + 1]] = [n[index + 1], n[index]]
+    reorderItems(n)
   }, [basketItems, reorderItems])
 
   return (
@@ -81,7 +98,7 @@ export default function HomePage() {
         >
           <span className="material-icons-outlined">shopping_basket</span>
           {basketItems.length > 0 && (
-            <span className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground text-xs rounded-full h-5 w-5 flex items-center justify-center">
+            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[11px] font-bold rounded-full h-5 w-5 flex items-center justify-center shadow-sm">
               {basketItems.length}
             </span>
           )}
@@ -90,10 +107,10 @@ export default function HomePage() {
 
       {/* Basket dialog – mobile */}
       <Dialog open={basketOpen} onOpenChange={setBasketOpen}>
-        <DialogContent className="max-h-[80vh] overflow-hidden flex flex-col">
+        <DialogContent className="max-h-[85vh] overflow-hidden flex flex-col rounded-t-2xl sm:rounded-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <span className="material-icons-outlined">shopping_basket</span>
+              <span className="material-icons-outlined text-primary">shopping_basket</span>
               수업 바구니
             </DialogTitle>
           </DialogHeader>
@@ -103,26 +120,32 @@ export default function HomePage() {
               onRemove={handleRemoveFromBasket}
               onMoveUp={handleMoveUp}
               onMoveDown={handleMoveDown}
-              onClear={() => setShowClearDialog(true)}
+              onClear={() => { setShowClearDialog(true); setBasketOpen(false) }}
               compact
             />
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Clear basket confirmation */}
+      {/* ── Clear basket confirmation ───────────────────────────────────── */}
       <Dialog open={showClearDialog} onOpenChange={setShowClearDialog}>
-        <DialogContent>
+        <DialogContent className="sm:rounded-2xl">
           <DialogHeader>
-            <DialogTitle>바구니 비우기</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <span className="material-icons-outlined text-destructive text-[20px]">delete_sweep</span>
+              바구니 비우기
+            </DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            바구니의 모든 항목({basketItems.length}개)을 삭제하시겠습니까?
+          <p className="text-sm text-muted-foreground mt-1">
+            바구니의 모든 항목 <strong className="text-foreground">{basketItems.length}개</strong>를 삭제하시겠습니까?
           </p>
           <div className="flex justify-end gap-2 mt-4">
-            <Button variant="outline" onClick={() => setShowClearDialog(false)}>취소</Button>
+            <Button variant="outline" onClick={() => setShowClearDialog(false)} className="rounded-xl">
+              취소
+            </Button>
             <Button
               variant="destructive"
+              className="rounded-xl"
               onClick={() => {
                 clearBasket()
                 setShowClearDialog(false)
@@ -138,6 +161,7 @@ export default function HomePage() {
   )
 }
 
+// ─── Basket Sidebar ──────────────────────────────────────────────────────────
 interface BasketSidebarProps {
   items: BasketItem[]
   onRemove: (code: string) => void
@@ -150,46 +174,46 @@ interface BasketSidebarProps {
 function BasketSidebar({ items, onRemove, onMoveUp, onMoveDown, onClear, compact }: BasketSidebarProps) {
   return (
     <div className={compact ? "" : "flex flex-col h-full"}>
-      <div className="flex items-center justify-between p-3 border-b">
+      <div className="flex items-center justify-between p-4 border-b">
         <div className="flex items-center gap-2">
-          <span className="material-icons-outlined text-[18px]">shopping_basket</span>
-          <span className="font-medium text-sm">수업 바구니</span>
+          <span className="material-icons-outlined text-[20px] text-primary">shopping_basket</span>
+          <span className="font-semibold text-sm">수업 바구니</span>
           {items.length > 0 && (
-            <Badge variant="secondary" className="text-xs">{items.length}</Badge>
+            <Badge variant="secondary" className="text-xs rounded-full">{items.length}</Badge>
           )}
         </div>
         {items.length > 0 && (
-          <Button variant="ghost" size="sm" onClick={onClear} className="text-destructive hover:text-destructive">
+          <Button variant="ghost" size="sm" onClick={onClear} className="text-destructive hover:text-destructive rounded-lg">
             <span className="material-icons-outlined text-[16px]">delete_sweep</span>
             <span className="ml-1 text-xs">비우기</span>
           </Button>
         )}
       </div>
 
-      <div className={compact ? "space-y-1 p-2" : "flex-1 overflow-auto space-y-1 p-2"}>
+      <div className={`custom-scrollbar ${compact ? "space-y-1.5 p-3" : "flex-1 overflow-auto space-y-1.5 p-3"}`}>
         {items.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-8 text-muted-foreground text-sm">
-            <span className="material-icons-outlined text-3xl mb-2 opacity-40">shopping_basket</span>
-            <p>바구니가 비어있습니다.</p>
-            <p className="text-xs mt-1">성취기준을 추가해보세요.</p>
+          <div className="flex flex-col items-center justify-center py-10 text-muted-foreground text-sm">
+            <span className="material-icons-outlined text-[40px] mb-3 opacity-25">shopping_basket</span>
+            <p className="font-medium">바구니가 비어있습니다</p>
+            <p className="text-xs mt-1 text-muted-foreground/70">성취기준을 추가해보세요</p>
           </div>
         ) : (
           items.map((item, index) => (
-            <div key={item.코드} className="group border rounded p-2 bg-background text-xs flex items-start gap-1">
+            <div key={item.코드} className="group border rounded-xl p-2.5 bg-background text-xs flex items-start gap-1.5 hover:border-primary/20 transition-colors">
               <div className="flex flex-col gap-0.5 shrink-0">
                 <button
-                  className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-accent rounded"
+                  className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-accent rounded-md transition-opacity"
                   onClick={() => onMoveUp(index)}
                   disabled={index === 0}
                 >
                   <span className="material-icons-outlined text-[14px]">keyboard_arrow_up</span>
                 </button>
                 <button
-                  className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-accent rounded"
+                  className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-accent rounded-md transition-opacity"
                   onClick={() => onMoveDown(index)}
                   disabled={index === items.length - 1}
                 >
-                  <span className="material-icons-outlined text-[14px]">keyboard_arrow_down</span>
+                  <span className="material-icons-outlined text-[14px]">close</span>
                 </button>
               </div>
               <div className="flex-1 min-w-0">
@@ -197,7 +221,7 @@ function BasketSidebar({ items, onRemove, onMoveUp, onMoveDown, onClear, compact
                 <div className="text-muted-foreground leading-tight mt-0.5 line-clamp-2">{item.내용}</div>
               </div>
               <button
-                className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-destructive/10 hover:text-destructive rounded shrink-0"
+                className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-destructive/10 hover:text-destructive rounded-md shrink-0 transition-opacity"
                 onClick={() => onRemove(item.코드)}
               >
                 <span className="material-icons-outlined text-[14px]">close</span>
@@ -207,15 +231,16 @@ function BasketSidebar({ items, onRemove, onMoveUp, onMoveDown, onClear, compact
         )}
       </div>
 
+      {/* Footer CTA */}
       {items.length > 0 && (
-        <div className="p-3 border-t">
-          <a
+        <div className="p-3 border-t border-border/60 shrink-0">
+          <Link
             href="/design"
-            className="flex items-center justify-center gap-2 w-full rounded-md bg-primary text-primary-foreground px-3 py-2 text-sm font-medium hover:bg-primary/90 transition-colors"
+            className="flex items-center justify-center gap-2 w-full rounded-xl bg-primary text-white px-3 py-2.5 text-sm font-semibold hover:bg-primary/90 transition-colors shadow-sm"
           >
             <span className="material-icons-outlined text-[18px]">edit_note</span>
             수업 디자인하기
-          </a>
+          </Link>
         </div>
       )}
     </div>

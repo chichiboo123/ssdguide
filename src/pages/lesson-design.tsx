@@ -25,6 +25,8 @@ const EVAL_METHODS = [
   "수행 평가", "서술형 평가", "지필 평가", "프로젝트 평가", "토론 평가",
 ]
 
+const LESSON_STORAGE_KEY = "seongsu-lesson-design"
+
 function genId() {
   return Math.random().toString(36).slice(2, 9)
 }
@@ -32,7 +34,7 @@ function genId() {
 
 function SectionBadge({ number }: { number: number }) {
   return (
-    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs font-bold shrink-0">
+    <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-primary text-primary-foreground text-xs font-bold shrink-0">
       {number}
     </span>
   )
@@ -263,9 +265,9 @@ export default function LessonDesignPage() {
         setObjective(data.objective || "")
         setProcess(data.process || "")
         setUseTableMode(data.useTableMode || false)
-        setProcessSteps(data.processSteps || [])
-        setEvaluations(data.evaluations || [])
-        setMaterials(data.materials || [])
+        setProcessSteps(data.processSteps || [{ id: genId(), period: "", topic: "", content: "", note: "" }])
+        setEvaluations(data.evaluations || [{ id: genId(), subject: "", methods: [], content: "" }])
+        setMaterials(data.materials || [{ id: genId(), type: "text", content: "" }])
         toast({ title: "불러오기 완료", duration: 1500 })
       } catch {
         toast({ title: "파일 형식 오류", variant: "destructive", duration: 1500 })
@@ -358,7 +360,6 @@ export default function LessonDesignPage() {
       else if (m.type === "link") lines.push(`- [${m.title || m.url}](${m.url})`)
       else if (m.type === "image") lines.push(`- 이미지: ${m.fileName}`)
     })
-
     try {
       await navigator.clipboard.writeText(lines.join("\n"))
       toast({ title: "클립보드에 복사 완료", duration: 1500 })
@@ -406,7 +407,7 @@ export default function LessonDesignPage() {
       </div>
 
       {/* Step 1: Title */}
-      <section className="border rounded-lg p-4 space-y-3">
+      <section className="border rounded-xl p-5 space-y-3 bg-card shadow-sm">
         <div className="flex items-center gap-2">
           <SectionBadge number={1} />
           <h2 className="font-semibold">수업(프로젝트) 주제명</h2>
@@ -415,18 +416,20 @@ export default function LessonDesignPage() {
           placeholder="수업 주제를 입력하세요"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
+          className="text-sm"
           data-testid="lesson-title"
         />
         <Input
-          placeholder="수업자 이름 (선택)"
+          placeholder="수업자 이름 (선택 사항)"
           value={author}
           onChange={(e) => setAuthor(e.target.value)}
+          className="text-sm"
           data-testid="lesson-author"
         />
       </section>
 
       {/* Step 2: Standards */}
-      <section className="border rounded-lg p-4 space-y-3">
+      <section className="border rounded-xl p-5 space-y-3 bg-card shadow-sm">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <SectionBadge number={2} />
@@ -455,37 +458,52 @@ export default function LessonDesignPage() {
           </div>
         </div>
         {standards.length === 0 ? (
-          <div className="text-center py-6 text-muted-foreground text-sm border-2 border-dashed rounded-lg">
-            <span className="material-icons-outlined block text-3xl mb-1 opacity-40">add_circle</span>
-            추가 버튼을 눌러 성취기준을 추가하세요
-          </div>
+          <button
+            onClick={() => setShowSearchDialog(true)}
+            className="w-full border-2 border-dashed border-border rounded-lg py-8 flex flex-col items-center text-muted-foreground hover:border-primary/40 hover:text-primary/70 transition-colors"
+          >
+            <span className="material-icons-outlined text-3xl mb-1.5 opacity-50">add_circle_outline</span>
+            <span className="text-sm">추가 버튼을 눌러 성취기준을 추가하세요</span>
+          </button>
         ) : (
           <div className="space-y-1.5">
             {standards.map((s, index) => (
-              <div key={s.코드} className="group flex items-start gap-1.5 border rounded p-2.5 text-sm bg-card">
-                <div className="flex flex-col gap-0.5 shrink-0">
+              <div key={s.코드} className="group flex items-start gap-2 bg-muted/40 border border-border/60 rounded-lg p-3 text-sm hover:border-primary/30 transition-colors">
+                <div className="flex flex-col gap-0.5 shrink-0 mt-0.5">
                   <button
-                    className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-accent rounded disabled:opacity-20"
+                    className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-background rounded disabled:opacity-20 transition-all"
                     onClick={() => handleMoveStandard(index, -1)}
                     disabled={index === 0}
                   >
-                    <span className="material-icons-outlined text-[14px]">keyboard_arrow_up</span>
+                    <span className="material-icons-outlined text-[13px] text-muted-foreground">keyboard_arrow_up</span>
                   </button>
                   <button
-                    className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-accent rounded disabled:opacity-20"
+                    className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-background rounded disabled:opacity-20 transition-all"
                     onClick={() => handleMoveStandard(index, 1)}
                     disabled={index === standards.length - 1}
                   >
-                    <span className="material-icons-outlined text-[14px]">keyboard_arrow_down</span>
+                    <span className="material-icons-outlined text-[13px] text-muted-foreground">keyboard_arrow_down</span>
                   </button>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <span className="font-mono font-semibold text-primary text-xs">{s.코드}</span>
-                  <span className="ml-2 text-muted-foreground text-xs">{s.교육과정} · {s.학년군} · {s.과목} · {s.영역}</span>
-                  <p className="mt-0.5">{s.내용}</p>
+                  <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+                    <span className="font-mono font-bold text-primary text-[11px] bg-primary/10 px-1.5 py-0.5 rounded">{s.코드}</span>
+                    <span className="text-[11px] text-muted-foreground">{s.교육과정}</span>
+                    <span className="text-[11px] text-muted-foreground">·</span>
+                    <span className="text-[11px] text-muted-foreground">{s.학년군}</span>
+                    <span className="text-[11px] text-muted-foreground">·</span>
+                    <span className="text-[11px] text-muted-foreground">{s.과목}</span>
+                    {s.영역 && (
+                      <>
+                        <span className="text-[11px] text-muted-foreground">·</span>
+                        <span className="text-[11px] text-muted-foreground">{s.영역}</span>
+                      </>
+                    )}
+                  </div>
+                  <p className="text-foreground/90 leading-relaxed">{s.내용}</p>
                 </div>
                 <button
-                  className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-destructive/10 hover:text-destructive rounded shrink-0"
+                  className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-destructive/10 hover:text-destructive rounded shrink-0 transition-all"
                   onClick={() => handleRemoveStandard(s.코드)}
                 >
                   <span className="material-icons-outlined text-[14px]">close</span>
@@ -497,7 +515,7 @@ export default function LessonDesignPage() {
       </section>
 
       {/* Step 3: Intent */}
-      <section className="border rounded-lg p-4 space-y-3">
+      <section className="border rounded-xl p-5 space-y-3 bg-card shadow-sm">
         <div className="flex items-center gap-2">
           <SectionBadge number={3} />
           <h2 className="font-semibold">수업자 의도</h2>
@@ -506,13 +524,13 @@ export default function LessonDesignPage() {
           placeholder="이 수업을 통해 학생들이 무엇을 경험하고 배우기를 바라는지 서술하세요."
           value={intent}
           onChange={(e) => setIntent(e.target.value)}
-          className="min-h-[100px]"
+          className="min-h-[100px] text-sm resize-y"
           data-testid="lesson-intent"
         />
       </section>
 
       {/* Step 4: Objective */}
-      <section className="border rounded-lg p-4 space-y-3">
+      <section className="border rounded-xl p-5 space-y-3 bg-card shadow-sm">
         <div className="flex items-center gap-2">
           <SectionBadge number={4} />
           <h2 className="font-semibold">수업 목표</h2>
@@ -521,13 +539,13 @@ export default function LessonDesignPage() {
           placeholder="수업이 끝난 후 학생들이 할 수 있게 되는 것을 구체적으로 작성하세요."
           value={objective}
           onChange={(e) => setObjective(e.target.value)}
-          className="min-h-[100px]"
+          className="min-h-[100px] text-sm resize-y"
           data-testid="lesson-objective"
         />
       </section>
 
       {/* Step 5: Process */}
-      <section className="border rounded-lg p-4 space-y-3">
+      <section className="border rounded-xl p-5 space-y-3 bg-card shadow-sm">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <SectionBadge number={5} />
@@ -547,7 +565,7 @@ export default function LessonDesignPage() {
               size="sm"
               onClick={() => setUseTableMode(false)}
             >
-              <span className="material-icons-outlined text-[16px]">notes</span>
+              <span className="material-icons-outlined text-[14px]">notes</span>
               자유 작성
             </Button>
           </div>
@@ -555,35 +573,52 @@ export default function LessonDesignPage() {
 
         {useTableMode ? (
           <div className="space-y-2">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm border-collapse">
+            <div className="overflow-x-auto rounded-lg border border-border/60">
+              <table className="w-full text-xs border-collapse">
                 <thead>
-                  <tr className="bg-muted">
-                    <th className="border p-2 text-left w-16">차시</th>
-                    <th className="border p-2 text-left w-32">수업 주제</th>
-                    <th className="border p-2 text-left">내용</th>
-                    <th className="border p-2 text-left w-24">비고</th>
-                    <th className="border p-2 w-8"></th>
+                  <tr className="bg-muted/60">
+                    <th className="border-b border-border/60 p-2.5 text-left font-semibold text-muted-foreground w-16">차시</th>
+                    <th className="border-b border-border/60 p-2.5 text-left font-semibold text-muted-foreground w-28">수업 주제</th>
+                    <th className="border-b border-border/60 p-2.5 text-left font-semibold text-muted-foreground">내용</th>
+                    <th className="border-b border-border/60 p-2.5 text-left font-semibold text-muted-foreground w-20">비고</th>
+                    <th className="border-b border-border/60 p-2 w-8"></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {processSteps.map((step) => (
-                    <tr key={step.id} className="group">
-                      <td className="border p-1">
-                        <Input value={step.period} onChange={(e) => updateStep(step.id, "period", e.target.value)} className="h-7 text-xs border-0 p-1" placeholder="1-2" />
+                  {processSteps.map((step, idx) => (
+                    <tr key={step.id} className={`group ${idx % 2 === 1 ? "bg-muted/20" : ""}`}>
+                      <td className="border-b border-border/40 p-1">
+                        <Input
+                          value={step.period}
+                          onChange={(e) => updateStep(step.id, "period", e.target.value)}
+                          className="h-7 text-xs border-0 bg-transparent p-1 focus-visible:ring-1"
+                          placeholder="1-2"
+                        />
                       </td>
-                      <td className="border p-1">
-                        <Input value={step.topic} onChange={(e) => updateStep(step.id, "topic", e.target.value)} className="h-7 text-xs border-0 p-1" />
+                      <td className="border-b border-border/40 p-1">
+                        <Input
+                          value={step.topic}
+                          onChange={(e) => updateStep(step.id, "topic", e.target.value)}
+                          className="h-7 text-xs border-0 bg-transparent p-1 focus-visible:ring-1"
+                        />
                       </td>
-                      <td className="border p-1">
-                        <Textarea value={step.content} onChange={(e) => updateStep(step.id, "content", e.target.value)} className="min-h-[60px] text-xs border-0 p-1 resize-none" />
+                      <td className="border-b border-border/40 p-1">
+                        <Textarea
+                          value={step.content}
+                          onChange={(e) => updateStep(step.id, "content", e.target.value)}
+                          className="min-h-[52px] text-xs border-0 bg-transparent p-1 resize-none focus-visible:ring-1"
+                        />
                       </td>
-                      <td className="border p-1">
-                        <Input value={step.note} onChange={(e) => updateStep(step.id, "note", e.target.value)} className="h-7 text-xs border-0 p-1" />
+                      <td className="border-b border-border/40 p-1">
+                        <Input
+                          value={step.note}
+                          onChange={(e) => updateStep(step.id, "note", e.target.value)}
+                          className="h-7 text-xs border-0 bg-transparent p-1 focus-visible:ring-1"
+                        />
                       </td>
-                      <td className="border p-1">
+                      <td className="border-b border-border/40 p-1">
                         <button
-                          className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-destructive/10 hover:text-destructive rounded"
+                          className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-destructive/10 hover:text-destructive rounded disabled:opacity-0 transition-all"
                           onClick={() => removeStep(step.id)}
                           disabled={processSteps.length === 1}
                         >
@@ -596,12 +631,12 @@ export default function LessonDesignPage() {
               </table>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={addStep}>
-                <span className="material-icons-outlined text-[16px]">add</span>
+              <Button variant="outline" size="sm" onClick={addStep} className="h-7 text-xs gap-1">
+                <span className="material-icons-outlined text-[14px]">add</span>
                 행 추가
               </Button>
-              <Button variant="outline" size="sm" onClick={copyProcessTable}>
-                <span className="material-icons-outlined text-[16px]">content_copy</span>
+              <Button variant="outline" size="sm" onClick={copyProcessTable} className="h-7 text-xs gap-1">
+                <span className="material-icons-outlined text-[14px]">content_copy</span>
                 마크다운 복사
               </Button>
             </div>
@@ -611,7 +646,7 @@ export default function LessonDesignPage() {
             placeholder="수업 과정을 자유롭게 서술하세요. (활동 내용, 흐름, 시간 배분 등)"
             value={process}
             onChange={(e) => setProcess(e.target.value)}
-            className="min-h-[160px]"
+            className="min-h-[160px] text-sm resize-y"
             data-testid="lesson-process"
           />
         )}
@@ -717,7 +752,7 @@ export default function LessonDesignPage() {
       </section>
 
       {/* Step 7: Materials */}
-      <section className="border rounded-lg p-4 space-y-3">
+      <section className="border rounded-xl p-5 space-y-3 bg-card shadow-sm">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <SectionBadge number={7} />
@@ -740,61 +775,73 @@ export default function LessonDesignPage() {
         </div>
         <div className="space-y-2">
           {materials.map((mat) => (
-            <div key={mat.id} className="group border rounded-lg p-3 space-y-2 bg-card">
+            <div key={mat.id} className="group bg-muted/30 border border-border/60 rounded-lg p-3.5 space-y-2.5">
               <div className="flex items-center justify-between">
-                <Badge variant="outline" className="text-xs">
+                <span className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full ${
+                  mat.type === "text"
+                    ? "bg-blue-50 text-blue-600 border border-blue-200"
+                    : mat.type === "link"
+                    ? "bg-green-50 text-green-600 border border-green-200"
+                    : "bg-purple-50 text-purple-600 border border-purple-200"
+                }`}>
+                  <span className="material-icons-outlined text-[13px]">
+                    {mat.type === "text" ? "text_fields" : mat.type === "link" ? "link" : "image"}
+                  </span>
                   {mat.type === "text" ? "텍스트" : mat.type === "link" ? "링크" : "이미지"}
-                </Badge>
+                </span>
                 <button
-                  className="p-0.5 hover:bg-destructive/10 hover:text-destructive rounded opacity-0 group-hover:opacity-100"
+                  className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-destructive/10 hover:text-destructive rounded disabled:opacity-0 transition-all text-muted-foreground"
                   onClick={() => removeMaterial(mat.id)}
                   disabled={materials.length === 1}
                 >
                   <span className="material-icons-outlined text-[14px]">close</span>
                 </button>
               </div>
+
               {mat.type === "text" && (
                 <Textarea
                   placeholder="텍스트 내용을 입력하세요"
                   value={mat.content}
                   onChange={(e) => updateMaterial(mat.id, { content: e.target.value })}
-                  className="min-h-[80px]"
+                  className="min-h-[80px] text-sm resize-y"
                 />
               )}
               {mat.type === "link" && (
-                <>
+                <div className="space-y-2">
                   <Input
                     placeholder="제목 (선택)"
                     value={mat.title || ""}
                     onChange={(e) => updateMaterial(mat.id, { title: e.target.value })}
+                    className="text-sm"
                   />
                   <Input
                     placeholder="URL"
                     value={mat.url || ""}
                     onChange={(e) => updateMaterial(mat.id, { url: e.target.value })}
                     type="url"
+                    className="text-sm"
                   />
-                </>
+                </div>
               )}
               {mat.type === "image" && (
                 <>
                   {mat.fileData ? (
-                    <div className="relative">
-                      <img src={mat.fileData} alt={mat.fileName} className="max-h-48 rounded object-contain" />
-                      <p className="text-xs text-muted-foreground mt-1">{mat.fileName}</p>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="mt-1"
-                        onClick={() => updateMaterial(mat.id, { fileData: undefined, fileName: undefined })}
-                      >
-                        <span className="material-icons-outlined text-[16px]">delete</span>
-                        이미지 삭제
-                      </Button>
+                    <div>
+                      <img src={mat.fileData} alt={mat.fileName} className="max-h-52 rounded-lg object-contain border border-border/60" />
+                      <div className="flex items-center justify-between mt-2">
+                        <p className="text-xs text-muted-foreground">{mat.fileName}</p>
+                        <button
+                          onClick={() => updateMaterial(mat.id, { fileData: undefined, fileName: undefined })}
+                          className="flex items-center gap-1 text-xs text-destructive hover:text-destructive/80 transition-colors"
+                        >
+                          <span className="material-icons-outlined text-[14px]">delete</span>
+                          삭제
+                        </button>
+                      </div>
                     </div>
                   ) : (
                     <div
-                      className="border-2 border-dashed rounded-lg p-6 text-center cursor-pointer hover:bg-accent/30 transition-colors"
+                      className="border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:border-primary/40 hover:bg-primary/5 transition-colors"
                       onClick={() => {
                         const input = document.createElement("input")
                         input.type = "file"
@@ -806,8 +853,9 @@ export default function LessonDesignPage() {
                         input.click()
                       }}
                     >
-                      <span className="material-icons-outlined text-3xl text-muted-foreground mb-2">upload_file</span>
+                      <span className="material-icons-outlined text-4xl text-muted-foreground/40 mb-2 block">upload_file</span>
                       <p className="text-sm text-muted-foreground">클릭하여 이미지를 업로드하세요</p>
+                      <p className="text-xs text-muted-foreground/60 mt-0.5">PNG, JPG, GIF 지원</p>
                     </div>
                   )}
                 </>
