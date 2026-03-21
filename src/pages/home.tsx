@@ -1,7 +1,6 @@
 import { useState, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
 import {
   Dialog,
   DialogContent,
@@ -13,28 +12,12 @@ import { useBasket } from "@/hooks/use-basket"
 import { useToast } from "@/hooks/use-toast"
 import type { BasketItem } from "@/lib/types"
 
-function loadFilterState() {
-  try {
-    const stored = localStorage.getItem(FILTER_STORAGE_KEY)
-    return stored ? JSON.parse(stored) : null
-  } catch {
-    return null
-  }
-}
-
-function saveFilterState(state: Record<string, string>) {
-  try {
-    localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(state))
-  } catch { /* ignore */ }
-}
-
 export default function HomePage() {
   const { items: basketItems, addItem, removeItem, reorderItems, clearBasket, isInBasket } = useBasket()
   const { toast } = useToast()
 
   const [showClearDialog, setShowClearDialog] = useState(false)
   const [basketOpen, setBasketOpen] = useState(false)
-  const [displayCount, setDisplayCount] = useState(PAGE_SIZE)
 
   const addedCodes = new Set(basketItems.map((b) => b.코드))
 
@@ -213,7 +196,7 @@ function BasketSidebar({ items, onRemove, onMoveUp, onMoveDown, onClear, compact
                   onClick={() => onMoveDown(index)}
                   disabled={index === items.length - 1}
                 >
-                  <span className="material-icons-outlined text-[14px]">close</span>
+                  <span className="material-icons-outlined text-[14px]">keyboard_arrow_down</span>
                 </button>
               </div>
               <div className="flex-1 min-w-0">
@@ -234,13 +217,13 @@ function BasketSidebar({ items, onRemove, onMoveUp, onMoveDown, onClear, compact
       {/* Footer CTA */}
       {items.length > 0 && (
         <div className="p-3 border-t border-border/60 shrink-0">
-          <Link
-            href="/design"
+          <a
+            href="/#/design"
             className="flex items-center justify-center gap-2 w-full rounded-xl bg-primary text-white px-3 py-2.5 text-sm font-semibold hover:bg-primary/90 transition-colors shadow-sm"
           >
             <span className="material-icons-outlined text-[18px]">edit_note</span>
             수업 디자인하기
-          </Link>
+          </a>
         </div>
       )}
     </div>
