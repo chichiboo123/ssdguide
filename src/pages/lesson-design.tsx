@@ -25,8 +25,6 @@ const EVAL_METHODS = [
   "수행 평가", "서술형 평가", "지필 평가", "프로젝트 평가", "토론 평가",
 ]
 
-const LESSON_STORAGE_KEY = "seongsu-lesson-design"
-
 function genId() {
   return Math.random().toString(36).slice(2, 9)
 }
@@ -68,9 +66,10 @@ function getShareParam(): string | null {
 
 function buildShareUrl(design: LessonDesign): string {
   const encoded = encodeDesign(design)
-  const url = new URL(window.location.href)
-  url.pathname = "/design"
+  // Hash routing: put share param in query string, hash stays as /#/design
+  const url = new URL(window.location.origin)
   url.search = `?share=${encoded}`
+  url.hash = "#/design"
   return url.toString()
 }
 
