@@ -181,7 +181,7 @@ export function AchievementFilterPanel({
         {/* 4-level filters */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {/* 교육과정 */}
-          <Select value={selectedCurriculum} onValueChange={handleCurriculumChange}>
+          <Select key={`curriculum-${selectedCurriculum}`} value={selectedCurriculum} onValueChange={handleCurriculumChange}>
             <SelectTrigger data-testid="filter-curriculum">
               <SelectValue placeholder="교육과정" />
             </SelectTrigger>
@@ -321,11 +321,11 @@ export function AchievementFilterPanel({
             <p>검색 결과가 없습니다.</p>
           </div>
         ) : (
-          filteredData.map((item) => {
+          filteredData.map((item, idx) => {
             const isAdded = addedCodes.has(item.코드)
             return (
               <div
-                key={item.코드}
+                key={`${item.코드}-${idx}`}
                 className="group border rounded-lg p-3 bg-card hover:bg-accent/30 transition-colors"
                 data-testid="achievement-item"
               >
