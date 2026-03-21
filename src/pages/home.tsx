@@ -81,7 +81,7 @@ export default function HomePage() {
   const { data: allData = [], isLoading } = useQuery<AchievementStandard[]>({
     queryKey: ["achievements"],
     queryFn: async () => {
-      const res = await fetch("/achievements-simple.json")
+      const res = await fetch(`${import.meta.env.BASE_URL}achievements-simple.json`)
       if (!res.ok) throw new Error("데이터를 불러올 수 없습니다.")
       return res.json()
     },

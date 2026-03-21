@@ -835,7 +835,7 @@ function SearchInDialog({
   const { data: allData = [], isLoading } = useQuery<BasketItem[]>({
     queryKey: ["achievements"],
     queryFn: async () => {
-      const res = await fetch("/achievements-simple.json")
+      const res = await fetch(`${import.meta.env.BASE_URL}achievements-simple.json`)
       return res.json()
     },
   })
