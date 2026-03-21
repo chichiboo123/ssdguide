@@ -431,7 +431,7 @@ export default function HomePage() {
                 )}
                 {keyword && (
                   <Badge variant="secondary" className="cursor-pointer gap-1 rounded-full pl-3 pr-2 py-1" onClick={() => setKeyword("")}>
-                    &ldquo;{keyword}&rdquo;
+                    &quot;{keyword}&quot;
                     <span className="material-icons-outlined text-[14px]">close</span>
                   </Badge>
                 )}
