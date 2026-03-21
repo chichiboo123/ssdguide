@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dialog"
 import { useBasket } from "@/hooks/use-basket"
 import { useToast } from "@/hooks/use-toast"
+import { formatStandard } from "@/lib/utils"
 import type { AchievementStandard, BasketItem } from "@/lib/types"
 
 const ALL_VALUE = "__all__"
@@ -185,7 +186,7 @@ export default function HomePage() {
 
   // ── Actions ───────────────────────────────────────────────────────────────
   const handleCopy = useCallback(async (item: AchievementStandard) => {
-    const text = `${item.코드} ${item.내용}`
+    const text = formatStandard(item)
     try {
       await navigator.clipboard.writeText(text)
       toast({ title: "복사 완료", description: item.코드, duration: 1500 })

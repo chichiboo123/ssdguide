@@ -20,9 +20,10 @@ export interface LessonProcessStep {
 
 export interface EvaluationEntry {
   id: string;
-  subject: string;
-  methods: string[];
-  content: string;
+  standards: string[];  // selected achievement standard codes
+  domain: string;       // 평가영역 (e.g. 읽기)
+  element: string;      // 평가요소 (e.g. 책을 읽고 글의 구조 파악하기)
+  methods: string[];    // 평가방법
 }
 
 export interface MaterialEntry {

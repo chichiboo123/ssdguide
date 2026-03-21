@@ -12,6 +12,7 @@ import {
 import { AchievementFilterPanel } from "@/components/achievement-filter-panel"
 import { useBasket } from "@/hooks/use-basket"
 import { useToast } from "@/hooks/use-toast"
+import { formatStandard } from "@/lib/utils"
 import type {
   LessonDesign,
   LessonProcessStep,
@@ -21,9 +22,21 @@ import type {
 } from "@/lib/types"
 
 const EVAL_METHODS = [
-  "관찰 평가", "포트폴리오", "자기평가", "동료평가",
-  "수행 평가", "서술형 평가", "지필 평가", "프로젝트 평가", "토론 평가",
+  "논술형", "서술형", "정의적 능력 평가", "협력적 문제해결력 평가",
+  "구술", "발표", "실기", "토의･토론", "실험･실습",
+  "보고서법", "프로젝트", "포트폴리오", "자기평가", "동료평가",
 ]
+
+/** Convert old-format evaluation entries to new format (migration fallback) */
+function migrateEval(raw: Record<string, unknown>): EvaluationEntry {
+  return {
+    id: (raw.id as string) || genId(),
+    standards: Array.isArray(raw.standards) ? (raw.standards as string[]) : [],
+    domain: (raw.domain as string) || (raw.subject as string) || "",
+    element: (raw.element as string) || (raw.content as string) || "",
+    methods: Array.isArray(raw.methods) ? (raw.methods as string[]) : [],
+  }
+}
 
 function genId() {
   return Math.random().toString(36).slice(2, 9)
@@ -90,7 +103,7 @@ export default function LessonDesignPage() {
     { id: genId(), period: "", topic: "", content: "", note: "" },
   ])
   const [evaluations, setEvaluations] = useState<EvaluationEntry[]>([
-    { id: genId(), subject: "", methods: [], content: "" },
+    { id: genId(), standards: [], domain: "", element: "", methods: [] },
   ])
   const [materials, setMaterials] = useState<MaterialEntry[]>([
     { id: genId(), type: "text", content: "" },
@@ -121,7 +134,8 @@ export default function LessonDesignPage() {
     setProcess(data.process || "")
     setUseTableMode(data.useTableMode || false)
     setProcessSteps(data.processSteps?.length ? data.processSteps : [{ id: genId(), period: "", topic: "", content: "", note: "" }])
-    setEvaluations(data.evaluations?.length ? data.evaluations : [{ id: genId(), subject: "", methods: [], content: "" }])
+    const rawEvals = data.evaluations as unknown as Record<string, unknown>[]
+    setEvaluations(rawEvals?.length ? rawEvals.map(migrateEval) : [{ id: genId(), standards: [], domain: "", element: "", methods: [] }])
     setMaterials(data.materials?.length ? data.materials : [{ id: genId(), type: "text", content: "" }])
     toast({ title: "공유된 수업 디자인을 불러왔습니다.", duration: 2000 })
     // Remove the share param from URL without page reload
@@ -150,7 +164,7 @@ export default function LessonDesignPage() {
   }, [])
 
   const handleCopyStandards = useCallback(async () => {
-    const text = standards.map((s) => `${s.코드} ${s.내용}`).join("\n")
+    const text = standards.map(formatStandard).join("\n")
     try {
       await navigator.clipboard.writeText(text)
       toast({ title: "성취기준 복사 완료", duration: 1500 })
@@ -192,7 +206,7 @@ export default function LessonDesignPage() {
   }, [processSteps, toast])
 
   // ── Evaluations ──────────────────────────────────────────────────────────
-  const addEval = () => setEvaluations((p) => [...p, { id: genId(), subject: "", methods: [], content: "" }])
+  const addEval = () => setEvaluations((p) => [...p, { id: genId(), standards: [], domain: "", element: "", methods: [] }])
   const removeEval = (id: string) => setEvaluations((p) => p.filter((e) => e.id !== id))
   const moveEval = (index: number, dir: -1 | 1) => {
     setEvaluations((prev) => {
@@ -203,8 +217,17 @@ export default function LessonDesignPage() {
       return next
     })
   }
-  const updateEval = (id: string, field: keyof Omit<EvaluationEntry, "id" | "methods">, value: string) => {
+  const updateEval = (id: string, field: keyof Omit<EvaluationEntry, "id" | "methods" | "standards">, value: string) => {
     setEvaluations((p) => p.map((e) => e.id === id ? { ...e, [field]: value } : e))
+  }
+  const toggleEvalStandard = (id: string, code: string) => {
+    setEvaluations((p) => p.map((e) => {
+      if (e.id !== id) return e
+      const standards = e.standards.includes(code)
+        ? e.standards.filter((c) => c !== code)
+        : [...e.standards, code]
+      return { ...e, standards }
+    }))
   }
   const toggleEvalMethod = (id: string, method: string) => {
     setEvaluations((p) => p.map((e) => {
@@ -265,7 +288,8 @@ export default function LessonDesignPage() {
         setProcess(data.process || "")
         setUseTableMode(data.useTableMode || false)
         setProcessSteps(data.processSteps || [{ id: genId(), period: "", topic: "", content: "", note: "" }])
-        setEvaluations(data.evaluations || [{ id: genId(), subject: "", methods: [], content: "" }])
+        const rawEvals2 = (data.evaluations || []) as unknown as Record<string, unknown>[]
+        setEvaluations(rawEvals2.length ? rawEvals2.map(migrateEval) : [{ id: genId(), standards: [], domain: "", element: "", methods: [] }])
         setMaterials(data.materials || [{ id: genId(), type: "text", content: "" }])
         toast({ title: "불러오기 완료", duration: 1500 })
       } catch {
@@ -283,7 +307,7 @@ export default function LessonDesignPage() {
     if (author) lines.push(`수업자: ${author}`)
     lines.push("")
     lines.push("■ 관련 성취기준")
-    standards.forEach((s) => lines.push(`  ${s.코드} ${s.내용}`))
+    standards.forEach((s) => lines.push(`  ${formatStandard(s)}`))
     lines.push("")
     lines.push("■ 수업자 의도")
     lines.push(intent || "(미작성)")
@@ -302,7 +326,10 @@ export default function LessonDesignPage() {
     lines.push("")
     lines.push("■ 평가 계획")
     evaluations.forEach((e, i) => {
-      lines.push(`  ${i + 1}. ${e.subject} | ${e.methods.join(", ")} | ${e.content}`)
+      lines.push(`  ${i + 1}. 평가영역: ${e.domain || "(미작성)"}`)
+      lines.push(`     평가요소: ${e.element || "(미작성)"}`)
+      if (e.standards.length) lines.push(`     성취기준: ${e.standards.join(", ")}`)
+      if (e.methods.length) lines.push(`     평가방법: ${e.methods.join(", ")}`)
     })
     lines.push("")
     lines.push("■ 수업 자료 및 아이디어")
@@ -329,7 +356,7 @@ export default function LessonDesignPage() {
     if (author) lines.push(`> 수업자: ${author}`)
     lines.push("")
     lines.push("## 1. 관련 성취기준")
-    standards.forEach((s) => lines.push(`- **${s.코드}** ${s.내용}`))
+    standards.forEach((s) => lines.push(`- [${s.코드}] ${s.내용}`))
     lines.push("")
     lines.push("## 2. 수업자 의도")
     lines.push(intent || "")
@@ -348,9 +375,11 @@ export default function LessonDesignPage() {
     lines.push("")
     lines.push("## 5. 평가 계획")
     evaluations.forEach((e, i) => {
-      lines.push(`### ${i + 1}. ${e.subject}`)
-      lines.push(`- 평가 방법: ${e.methods.join(", ")}`)
-      lines.push(`- 평가 내용: ${e.content}`)
+      lines.push(`### ${i + 1}.`)
+      if (e.standards.length) lines.push(`- **성취기준**: ${e.standards.join(", ")}`)
+      if (e.domain) lines.push(`- **평가영역**: ${e.domain}`)
+      if (e.element) lines.push(`- **평가요소**: ${e.element}`)
+      if (e.methods.length) lines.push(`- **평가방법**: ${e.methods.join(", ")}`)
     })
     lines.push("")
     lines.push("## 6. 수업 자료")
@@ -651,9 +680,9 @@ export default function LessonDesignPage() {
         )}
       </section>
 
-      {/* Step 6: Evaluation – unified table */}
-      <section className="border rounded-lg p-4 space-y-3">
-        <div className="flex items-center justify-between">
+      {/* Step 6: Evaluation */}
+      <section className="border rounded-xl p-5 space-y-3 bg-card shadow-sm">
+        <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <SectionBadge number={6} />
             <h2 className="font-semibold">평가 계획</h2>
@@ -665,88 +694,122 @@ export default function LessonDesignPage() {
           </Button>
         </div>
 
-        <div className="overflow-x-auto rounded-lg border">
-          <table className="w-full text-sm border-collapse min-w-[600px]">
-            <thead>
-              <tr className="bg-muted text-left">
-                <th className="border-b px-3 py-2 w-8 text-center text-muted-foreground font-medium">#</th>
-                <th className="border-b px-3 py-2 w-40 font-medium">평가 대상/제목</th>
-                <th className="border-b px-3 py-2 font-medium">평가 방법</th>
-                <th className="border-b px-3 py-2 font-medium">평가 내용</th>
-                <th className="border-b px-3 py-2 w-16 text-center font-medium">순서/삭제</th>
-              </tr>
-            </thead>
-            <tbody>
-              {evaluations.map((ev, index) => (
-                <tr key={ev.id} className="group border-b last:border-b-0 align-top">
-                  <td className="px-3 py-2 text-center text-xs text-muted-foreground font-medium">
-                    {index + 1}
-                  </td>
-                  <td className="px-2 py-2">
-                    <Input
-                      placeholder="제목 입력"
-                      value={ev.subject}
-                      onChange={(e) => updateEval(ev.id, "subject", e.target.value)}
-                      className="text-sm h-8"
-                    />
-                  </td>
-                  <td className="px-2 py-2">
-                    <div className="flex flex-wrap gap-1">
-                      {EVAL_METHODS.map((method) => (
+        <div className="space-y-4">
+          {evaluations.map((ev, index) => (
+            <div key={ev.id} className="group border rounded-xl overflow-hidden">
+              {/* Card header */}
+              <div className="flex items-center justify-between bg-muted/50 px-3 py-2 border-b">
+                <span className="text-xs font-semibold text-muted-foreground">평가 {index + 1}</span>
+                <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    className="p-1 hover:bg-accent rounded disabled:opacity-30 transition-colors"
+                    onClick={() => moveEval(index, -1)}
+                    disabled={index === 0}
+                    title="위로"
+                  >
+                    <span className="material-icons-outlined text-[14px]">keyboard_arrow_up</span>
+                  </button>
+                  <button
+                    className="p-1 hover:bg-accent rounded disabled:opacity-30 transition-colors"
+                    onClick={() => moveEval(index, 1)}
+                    disabled={index === evaluations.length - 1}
+                    title="아래로"
+                  >
+                    <span className="material-icons-outlined text-[14px]">keyboard_arrow_down</span>
+                  </button>
+                  <button
+                    className="p-1 hover:bg-destructive/10 hover:text-destructive rounded disabled:opacity-30 transition-colors"
+                    onClick={() => removeEval(ev.id)}
+                    disabled={evaluations.length === 1}
+                    title="삭제"
+                  >
+                    <span className="material-icons-outlined text-[14px]">delete_outline</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-3 space-y-4">
+                {/* ① 성취기준 */}
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground mb-1.5">① 성취기준</p>
+                  {standards.length === 0 ? (
+                    <p className="text-xs text-muted-foreground italic">2단계에서 성취기준을 먼저 추가하세요.</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {standards.map((s) => (
                         <button
-                          key={method}
-                          onClick={() => toggleEvalMethod(ev.id, method)}
-                          className={`text-xs px-2 py-0.5 rounded-full border transition-colors whitespace-nowrap ${
-                            ev.methods.includes(method)
+                          key={s.코드}
+                          onClick={() => toggleEvalStandard(ev.id, s.코드)}
+                          title={s.내용}
+                          className={`text-xs px-2 py-1 rounded-lg border font-mono transition-colors whitespace-nowrap ${
+                            ev.standards.includes(s.코드)
                               ? "bg-primary text-primary-foreground border-primary"
                               : "bg-background border-border hover:bg-accent"
                           }`}
                         >
-                          {method}
+                          {s.코드}
                         </button>
                       ))}
                     </div>
-                  </td>
-                  <td className="px-2 py-2">
-                    <Textarea
-                      placeholder="평가 내용"
-                      value={ev.content}
-                      onChange={(e) => updateEval(ev.id, "content", e.target.value)}
-                      className="min-h-[72px] text-sm resize-none"
-                    />
-                  </td>
-                  <td className="px-2 py-2">
-                    <div className="flex flex-col items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button
-                        className="p-0.5 hover:bg-accent rounded disabled:opacity-30"
-                        onClick={() => moveEval(index, -1)}
-                        disabled={index === 0}
-                        title="위로"
-                      >
-                        <span className="material-icons-outlined text-[14px]">keyboard_arrow_up</span>
-                      </button>
-                      <button
-                        className="p-0.5 hover:bg-accent rounded disabled:opacity-30"
-                        onClick={() => moveEval(index, 1)}
-                        disabled={index === evaluations.length - 1}
-                        title="아래로"
-                      >
-                        <span className="material-icons-outlined text-[14px]">keyboard_arrow_down</span>
-                      </button>
-                      <button
-                        className="p-0.5 hover:bg-destructive/10 hover:text-destructive rounded disabled:opacity-30"
-                        onClick={() => removeEval(ev.id)}
-                        disabled={evaluations.length === 1}
-                        title="삭제"
-                      >
-                        <span className="material-icons-outlined text-[14px]">delete_outline</span>
-                      </button>
+                  )}
+                  {ev.standards.length > 0 && (
+                    <div className="mt-2 space-y-1 pl-1">
+                      {ev.standards.map((code) => {
+                        const std = standards.find((s) => s.코드 === code)
+                        return std ? (
+                          <p key={code} className="text-xs text-muted-foreground leading-relaxed">
+                            <span className="font-mono font-semibold text-primary">[{code}]</span> {std.내용}
+                          </p>
+                        ) : null
+                      })}
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  )}
+                </div>
+
+                {/* ② 평가영역 + ③ 평가요소 */}
+                <div className="grid grid-cols-1 sm:grid-cols-[1fr_2fr] gap-3">
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground mb-1">② 평가영역</p>
+                    <Input
+                      placeholder="예: 읽기"
+                      value={ev.domain}
+                      onChange={(e) => updateEval(ev.id, "domain", e.target.value)}
+                      className="text-sm h-8"
+                    />
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground mb-1">③ 평가요소</p>
+                    <Input
+                      placeholder="예: 책을 읽고 글의 구조 파악하기"
+                      value={ev.element}
+                      onChange={(e) => updateEval(ev.id, "element", e.target.value)}
+                      className="text-sm h-8"
+                    />
+                  </div>
+                </div>
+
+                {/* ④ 평가방법 */}
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground mb-1.5">④ 평가방법</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {EVAL_METHODS.map((method) => (
+                      <button
+                        key={method}
+                        onClick={() => toggleEvalMethod(ev.id, method)}
+                        className={`text-xs px-2.5 py-1 rounded-full border transition-colors whitespace-nowrap ${
+                          ev.methods.includes(method)
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "bg-background border-border hover:bg-accent"
+                        }`}
+                      >
+                        {method}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </section>
 
