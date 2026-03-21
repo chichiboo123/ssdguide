@@ -51,10 +51,62 @@ function SectionBadge({ number }: { number: number }) {
   )
 }
 
-// ─── Link sharing helpers ───────────────────────────────────────────────────
+// ─── Cloudinary image upload ─────────────────────────────────────────────────
+// Configure via environment variables (create .env.local from .env.example):
+//   VITE_CLOUDINARY_CLOUD_NAME   — your Cloudinary cloud name
+//   VITE_CLOUDINARY_UPLOAD_PRESET — unsigned upload preset name
+const CLOUDINARY_CLOUD = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME as string | undefined
+const CLOUDINARY_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET as string | undefined
+const cloudinaryEnabled = !!(CLOUDINARY_CLOUD && CLOUDINARY_PRESET)
+
+/** Compress + resize an image data URL to JPEG ≤ maxWidth px, returning a Blob */
+async function compressImage(dataUrl: string, maxWidth = 1600, quality = 0.82): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => {
+      let { width, height } = img
+      if (width > maxWidth) {
+        height = Math.round((height * maxWidth) / width)
+        width = maxWidth
+      }
+      const canvas = document.createElement("canvas")
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext("2d")
+      if (!ctx) return reject(new Error("Canvas unavailable"))
+      ctx.drawImage(img, 0, 0, width, height)
+      canvas.toBlob(
+        (blob) => (blob ? resolve(blob) : reject(new Error("Compression failed"))),
+        "image/jpeg",
+        quality
+      )
+    }
+    img.onerror = () => reject(new Error("Image load failed"))
+    img.src = dataUrl
+  })
+}
+
+/** Upload a base64 data URL to Cloudinary and return the public secure_url */
+async function uploadToCloudinary(dataUrl: string, fileName: string): Promise<string> {
+  if (!CLOUDINARY_CLOUD || !CLOUDINARY_PRESET) throw new Error("Cloudinary not configured")
+  const blob = await compressImage(dataUrl)
+  const safeName = `${Date.now()}-${fileName.replace(/[^a-zA-Z0-9._-]/g, "_")}`
+  const form = new FormData()
+  form.append("file", blob, safeName)
+  form.append("upload_preset", CLOUDINARY_PRESET)
+  const res = await fetch(
+    `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/image/upload`,
+    { method: "POST", body: form }
+  )
+  if (!res.ok) throw new Error(`Cloudinary HTTP ${res.status}`)
+  const json = await res.json()
+  return json.secure_url as string
+}
+
+// ─── Link sharing helpers ─────────────────────────────────────────────────────
 
 function encodeDesign(design: LessonDesign): string {
-  // Strip binary image data to keep URL manageable
+  // Strip local binary data — sharedImageUrl (Cloudinary URL) is preserved
   const exportable: LessonDesign = {
     ...design,
     materials: design.materials.map((m) =>
@@ -121,6 +173,7 @@ export default function LessonDesignPage() {
   const [showShareDialog, setShowShareDialog] = useState(false)
   const [shareUrl, setShareUrl] = useState("")
   const [urlCopied, setUrlCopied] = useState(false)
+  const [isUploadingImages, setIsUploadingImages] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -404,21 +457,68 @@ export default function LessonDesignPage() {
     setShowExportMenu(false)
   }
 
-  const handleShareLink = () => {
-    const design = buildDesign()
-    const hasImages = design.materials.some((m) => m.type === "image" && m.fileData)
+  const handleShareLink = async () => {
+    setShowExportMenu(false)
+
+    // Work with a mutable copy of materials so we can apply upload results
+    // without depending on stale React state after async operations.
+    let updatedMaterials = [...materials]
+
+    // Upload local images that haven't been shared yet
+    if (cloudinaryEnabled) {
+      const toUpload = updatedMaterials.filter(
+        (m) => m.type === "image" && m.fileData && !m.sharedImageUrl
+      )
+      if (toUpload.length > 0) {
+        setIsUploadingImages(true)
+        const results = await Promise.allSettled(
+          toUpload.map((m) => uploadToCloudinary(m.fileData!, m.fileName || "image.jpg"))
+        )
+        const failures: string[] = []
+        results.forEach((result, i) => {
+          if (result.status === "fulfilled") {
+            updatedMaterials = updatedMaterials.map((m) =>
+              m.id === toUpload[i].id ? { ...m, sharedImageUrl: result.value } : m
+            )
+          } else {
+            failures.push(toUpload[i].fileName || `이미지 ${i + 1}`)
+          }
+        })
+        setMaterials(updatedMaterials)
+        setIsUploadingImages(false)
+        if (failures.length > 0) {
+          toast({
+            title: `이미지 ${failures.length}개 업로드 실패`,
+            description: `${failures.join(", ")} — 해당 이미지는 공유 링크에 포함되지 않습니다.`,
+            variant: "destructive",
+            duration: 4000,
+          })
+        }
+      }
+    } else {
+      // Cloudinary not configured: warn if local images would be lost
+      const hasUnsharedImages = updatedMaterials.some(
+        (m) => m.type === "image" && m.fileData && !m.sharedImageUrl
+      )
+      if (hasUnsharedImages) {
+        toast({
+          title: "이미지는 공유 링크에 포함되지 않습니다.",
+          description: "이미지 공유를 원하면 .env.local에 Cloudinary 설정을 추가하세요.",
+          duration: 4000,
+        })
+      }
+    }
+
+    // Build the design with the (possibly updated) materials
+    const design: LessonDesign = {
+      title, author, standards, intent, objective, process,
+      useTableMode, processSteps, evaluations,
+      materials: updatedMaterials,
+    }
     const url = buildShareUrl(design)
     setShareUrl(url)
     setUrlCopied(false)
     setShowShareDialog(true)
-    setShowExportMenu(false)
-    if (hasImages) {
-      toast({
-        title: "이미지는 공유 링크에 포함되지 않습니다.",
-        description: "이미지를 제외한 나머지 내용이 공유됩니다.",
-        duration: 3000,
-      })
-    }
   }
 
   const copyShareUrl = async () => {
@@ -894,18 +994,32 @@ export default function LessonDesignPage() {
               )}
               {mat.type === "image" && (
                 <>
-                  {mat.fileData ? (
+                  {(mat.fileData || mat.sharedImageUrl) ? (
                     <div>
-                      <img src={mat.fileData} alt={mat.fileName} className="max-h-52 rounded-lg object-contain border border-border/60" />
+                      <img
+                        src={mat.fileData || mat.sharedImageUrl}
+                        alt={mat.fileName}
+                        className="max-h-52 rounded-lg object-contain border border-border/60"
+                      />
                       <div className="flex items-center justify-between mt-2">
-                        <p className="text-xs text-muted-foreground">{mat.fileName}</p>
-                        <button
-                          onClick={() => updateMaterial(mat.id, { fileData: undefined, fileName: undefined })}
-                          className="flex items-center gap-1 text-xs text-destructive hover:text-destructive/80 transition-colors"
-                        >
-                          <span className="material-icons-outlined text-[14px]">delete</span>
-                          삭제
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs text-muted-foreground">{mat.fileName}</p>
+                          {mat.sharedImageUrl && (
+                            <span className="inline-flex items-center gap-0.5 text-[10px] text-green-600 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded-full">
+                              <span className="material-icons-outlined text-[11px]">cloud_done</span>
+                              업로드됨
+                            </span>
+                          )}
+                        </div>
+                        {mat.fileData && (
+                          <button
+                            onClick={() => updateMaterial(mat.id, { fileData: undefined, fileName: undefined, sharedImageUrl: undefined })}
+                            className="flex items-center gap-1 text-xs text-destructive hover:text-destructive/80 transition-colors"
+                          >
+                            <span className="material-icons-outlined text-[14px]">delete</span>
+                            삭제
+                          </button>
+                        )}
                       </div>
                     </div>
                   ) : (
@@ -1002,9 +1116,10 @@ export default function LessonDesignPage() {
             {/* Menu items */}
             <div className="flex flex-col items-end gap-2 mb-1">
               <FabMenuItem
-                icon="link"
-                label="링크 공유"
+                icon={isUploadingImages ? "hourglass_empty" : "link"}
+                label={isUploadingImages ? "이미지 업로드 중…" : "링크 공유"}
                 onClick={handleShareLink}
+                disabled={isUploadingImages}
               />
               <FabMenuItem
                 icon="content_copy"
@@ -1056,17 +1171,22 @@ function FabMenuItem({
   icon,
   label,
   onClick,
+  disabled = false,
 }: {
   icon: string
   label: string
   onClick: () => void
+  disabled?: boolean
 }) {
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-2 bg-background border shadow-md rounded-full px-4 py-2 text-sm font-medium hover:bg-accent transition-colors"
+      disabled={disabled}
+      className="flex items-center gap-2 bg-background border shadow-md rounded-full px-4 py-2 text-sm font-medium hover:bg-accent transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
     >
-      <span className="material-icons-outlined text-[18px] text-primary">{icon}</span>
+      <span className={`material-icons-outlined text-[18px] ${disabled ? "text-muted-foreground animate-spin" : "text-primary"}`}>
+        {icon}
+      </span>
       {label}
     </button>
   )

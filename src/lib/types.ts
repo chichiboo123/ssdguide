@@ -32,8 +32,9 @@ export interface MaterialEntry {
   content: string;
   title?: string;
   url?: string;
-  fileData?: string;
+  fileData?: string;         // base64 data URL — local preview only, never shared
   fileName?: string;
+  sharedImageUrl?: string;   // Cloudinary public URL — set after upload, included in share
 }
 
 export interface LessonDesign {
