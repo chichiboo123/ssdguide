@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react"
+import { Link } from "wouter"
 import { useQuery } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -21,6 +23,7 @@ import type { AchievementStandard, BasketItem } from "@/lib/types"
 
 const ALL_VALUE = "__all__"
 const FILTER_STORAGE_KEY = "seongsu-filter-state"
+const PAGE_SIZE = 50
 
 function useDebounce<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value)
@@ -58,8 +61,7 @@ export default function HomePage() {
   const [selectedArea, setSelectedArea] = useState<string>(savedFilters.current?.area || ALL_VALUE)
   const [keyword, setKeyword] = useState(savedFilters.current?.keyword || "")
   const [showClearDialog, setShowClearDialog] = useState(false)
-  const [basketOpen, setBasketOpen] = useState(false)        // mobile dialog
-  const [sidebarVisible, setSidebarVisible] = useState(true) // desktop sidebar toggle
+  const [basketOpen, setBasketOpen] = useState(false)
   const [displayCount, setDisplayCount] = useState(PAGE_SIZE)
 
   const debouncedKeyword = useDebounce(keyword, 300)
@@ -76,7 +78,7 @@ export default function HomePage() {
     })
   }, [selectedCurriculum, selectedGrade, selectedSubject, selectedArea, keyword])
 
-  const { data: allData = [], isLoading, isError } = useQuery<AchievementStandard[]>({
+  const { data: allData = [], isLoading } = useQuery<AchievementStandard[]>({
     queryKey: ["achievements"],
     queryFn: async () => {
       const res = await fetch("/achievements-simple.json")
@@ -431,7 +433,7 @@ export default function HomePage() {
                 )}
                 {keyword && (
                   <Badge variant="secondary" className="cursor-pointer gap-1 rounded-full pl-3 pr-2 py-1" onClick={() => setKeyword("")}>
-                    &ldquo;{keyword}&rdquo;
+                    &quot;{keyword}&quot;
                     <span className="material-icons-outlined text-[14px]">close</span>
                   </Badge>
                 )}
@@ -469,7 +471,7 @@ export default function HomePage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {filteredData.map((item) => {
+              {displayedData.map((item) => {
                 const inBasket = isInBasket(item.코드)
                 return (
                   <div
@@ -548,7 +550,7 @@ export default function HomePage() {
               {basketItems.length}
             </span>
           )}
-        </button>
+        </Button>
       </div>
 
       {/* ── Basket dialog (mobile) ──────────────────────────────────────── */}
@@ -607,19 +609,6 @@ export default function HomePage() {
   )
 }
 
-// ─── Filter Chip ─────────────────────────────────────────────────────────────
-function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }) {
-  return (
-    <button
-      onClick={onRemove}
-      className="inline-flex items-center gap-1 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full hover:bg-primary/20 transition-colors font-medium"
-    >
-      {label}
-      <span className="material-icons-outlined text-[11px]">close</span>
-    </button>
-  )
-}
-
 // ─── Basket Sidebar ──────────────────────────────────────────────────────────
 interface BasketSidebarProps {
   items: BasketItem[]
@@ -627,11 +616,10 @@ interface BasketSidebarProps {
   onMoveUp: (index: number) => void
   onMoveDown: (index: number) => void
   onClear: () => void
-  onClose?: () => void
   compact?: boolean
 }
 
-function BasketSidebar({ items, onRemove, onMoveUp, onMoveDown, onClear, onClose, compact }: BasketSidebarProps) {
+function BasketSidebar({ items, onRemove, onMoveUp, onMoveDown, onClear, compact }: BasketSidebarProps) {
   return (
     <div className={compact ? "" : "flex flex-col h-full"}>
       <div className="flex items-center justify-between p-4 border-b">
