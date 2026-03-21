@@ -32,13 +32,30 @@ const EVAL_METHODS = [
   "수행 평가", "서술형 평가", "지필 평가", "프로젝트 평가", "토론 평가",
 ]
 
+const LESSON_STORAGE_KEY = "seongsu-lesson-design"
+
 function genId() {
   return Math.random().toString(36).slice(2, 9)
 }
 
+function loadLessonDesign(): Partial<LessonDesign> | null {
+  try {
+    const stored = localStorage.getItem(LESSON_STORAGE_KEY)
+    return stored ? JSON.parse(stored) : null
+  } catch {
+    return null
+  }
+}
+
+function saveLessonDesign(data: LessonDesign) {
+  try {
+    localStorage.setItem(LESSON_STORAGE_KEY, JSON.stringify(data))
+  } catch { /* ignore */ }
+}
+
 function SectionBadge({ number }: { number: number }) {
   return (
-    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs font-bold shrink-0">
+    <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-primary text-primary-foreground text-xs font-bold shrink-0">
       {number}
     </span>
   )
@@ -48,25 +65,37 @@ export default function LessonDesignPage() {
   const { items: basketItems, addItem } = useBasket()
   const { toast } = useToast()
 
-  const [title, setTitle] = useState("")
-  const [author, setAuthor] = useState("")
-  const [standards, setStandards] = useState<BasketItem[]>([...basketItems])
-  const [intent, setIntent] = useState("")
-  const [objective, setObjective] = useState("")
-  const [process, setProcess] = useState("")
-  const [useTableMode, setUseTableMode] = useState(false)
-  const [processSteps, setProcessSteps] = useState<LessonProcessStep[]>([
-    { id: genId(), period: "", topic: "", content: "", note: "" },
-  ])
-  const [evaluations, setEvaluations] = useState<EvaluationEntry[]>([
-    { id: genId(), subject: "", methods: [], content: "" },
-  ])
-  const [materials, setMaterials] = useState<MaterialEntry[]>([
-    { id: genId(), type: "text", content: "" },
-  ])
+  const savedDesign = useRef(loadLessonDesign())
+
+  const [title, setTitle] = useState(savedDesign.current?.title || "")
+  const [author, setAuthor] = useState(savedDesign.current?.author || "")
+  const [standards, setStandards] = useState<BasketItem[]>(
+    savedDesign.current?.standards?.length ? savedDesign.current.standards : [...basketItems]
+  )
+  const [intent, setIntent] = useState(savedDesign.current?.intent || "")
+  const [objective, setObjective] = useState(savedDesign.current?.objective || "")
+  const [process, setProcess] = useState(savedDesign.current?.process || "")
+  const [useTableMode, setUseTableMode] = useState(savedDesign.current?.useTableMode || false)
+  const [processSteps, setProcessSteps] = useState<LessonProcessStep[]>(
+    savedDesign.current?.processSteps?.length ? savedDesign.current.processSteps : [{ id: genId(), period: "", topic: "", content: "", note: "" }]
+  )
+  const [evaluations, setEvaluations] = useState<EvaluationEntry[]>(
+    savedDesign.current?.evaluations?.length ? savedDesign.current.evaluations : [{ id: genId(), subject: "", methods: [], content: "" }]
+  )
+  const [materials, setMaterials] = useState<MaterialEntry[]>(
+    savedDesign.current?.materials?.length ? savedDesign.current.materials : [{ id: genId(), type: "text", content: "" }]
+  )
   const [showSearchDialog, setShowSearchDialog] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Auto-save to localStorage (debounced)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      saveLessonDesign({ title, author, standards, intent, objective, process, useTableMode, processSteps, evaluations, materials })
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [title, author, standards, intent, objective, process, useTableMode, processSteps, evaluations, materials])
 
   // --- Standards section ---
   const handleSortStandards = useCallback((asc: boolean) => {
@@ -292,27 +321,27 @@ export default function LessonDesignPage() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto p-4 lg:p-6 space-y-6">
+    <div className="max-w-3xl mx-auto p-4 lg:p-8 space-y-6 pb-16">
       {/* Header actions */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-lg font-semibold flex items-center gap-2">
-          <span className="material-icons-outlined text-primary">edit_note</span>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <h1 className="text-xl font-bold flex items-center gap-2">
+          <span className="material-icons-outlined text-primary text-[28px]">edit_note</span>
           수업 디자인
         </h1>
         <div className="flex items-center gap-2 flex-wrap">
-          <Button variant="outline" size="sm" onClick={handleJsonExport}>
+          <Button variant="outline" size="sm" onClick={handleJsonExport} className="rounded-xl">
             <span className="material-icons-outlined text-[16px]">download</span>
             JSON 저장
           </Button>
-          <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+          <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} className="rounded-xl">
             <span className="material-icons-outlined text-[16px]">upload</span>
             JSON 불러오기
           </Button>
-          <Button variant="outline" size="sm" onClick={handleTxtDownload}>
+          <Button variant="outline" size="sm" onClick={handleTxtDownload} className="rounded-xl">
             <span className="material-icons-outlined text-[16px]">text_snippet</span>
             TXT
           </Button>
-          <Button variant="outline" size="sm" onClick={handleCopyAll}>
+          <Button variant="outline" size="sm" onClick={handleCopyAll} className="rounded-xl">
             <span className="material-icons-outlined text-[16px]">content_copy</span>
             전체 복사
           </Button>
@@ -321,7 +350,7 @@ export default function LessonDesignPage() {
       </div>
 
       {/* Step 1: Title */}
-      <section className="border rounded-lg p-4 space-y-3">
+      <section className="border rounded-xl p-5 space-y-3 bg-card shadow-sm">
         <div className="flex items-center gap-2">
           <SectionBadge number={1} />
           <h2 className="font-semibold">수업(프로젝트) 주제명</h2>
@@ -341,7 +370,7 @@ export default function LessonDesignPage() {
       </section>
 
       {/* Step 2: Standards */}
-      <section className="border rounded-lg p-4 space-y-3">
+      <section className="border rounded-xl p-5 space-y-3 bg-card shadow-sm">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <SectionBadge number={2} />
@@ -412,7 +441,7 @@ export default function LessonDesignPage() {
       </section>
 
       {/* Step 3: Intent */}
-      <section className="border rounded-lg p-4 space-y-3">
+      <section className="border rounded-xl p-5 space-y-3 bg-card shadow-sm">
         <div className="flex items-center gap-2">
           <SectionBadge number={3} />
           <h2 className="font-semibold">수업자 의도</h2>
@@ -427,7 +456,7 @@ export default function LessonDesignPage() {
       </section>
 
       {/* Step 4: Objective */}
-      <section className="border rounded-lg p-4 space-y-3">
+      <section className="border rounded-xl p-5 space-y-3 bg-card shadow-sm">
         <div className="flex items-center gap-2">
           <SectionBadge number={4} />
           <h2 className="font-semibold">수업 목표</h2>
@@ -442,7 +471,7 @@ export default function LessonDesignPage() {
       </section>
 
       {/* Step 5: Process */}
-      <section className="border rounded-lg p-4 space-y-3">
+      <section className="border rounded-xl p-5 space-y-3 bg-card shadow-sm">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <SectionBadge number={5} />
@@ -533,7 +562,7 @@ export default function LessonDesignPage() {
       </section>
 
       {/* Step 6: Evaluation */}
-      <section className="border rounded-lg p-4 space-y-3">
+      <section className="border rounded-xl p-5 space-y-3 bg-card shadow-sm">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <SectionBadge number={6} />
@@ -607,7 +636,7 @@ export default function LessonDesignPage() {
       </section>
 
       {/* Step 7: Materials */}
-      <section className="border rounded-lg p-4 space-y-3">
+      <section className="border rounded-xl p-5 space-y-3 bg-card shadow-sm">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <SectionBadge number={7} />
@@ -748,7 +777,7 @@ function SearchInDialog({
   const { data: allData = [], isLoading } = useQuery<BasketItem[]>({
     queryKey: ["achievements"],
     queryFn: async () => {
-      const res = await fetch("/data/achievements-simple.json")
+      const res = await fetch("/achievements-simple.json")
       return res.json()
     },
   })
