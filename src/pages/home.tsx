@@ -1,148 +1,34 @@
-import { useState, useEffect, useMemo, useCallback } from "react"
-import { useQuery } from "@tanstack/react-query"
+import { useState, useCallback } from "react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { AchievementFilterPanel } from "@/components/achievement-filter-panel"
 import { useBasket } from "@/hooks/use-basket"
 import { useToast } from "@/hooks/use-toast"
-import type { AchievementStandard, BasketItem } from "@/lib/types"
-
-const ALL_VALUE = "__all__"
-
-function useDebounce<T>(value: T, delay: number): T {
-  const [debounced, setDebounced] = useState(value)
-  useEffect(() => {
-    const timer = setTimeout(() => setDebounced(value), delay)
-    return () => clearTimeout(timer)
-  }, [value, delay])
-  return debounced
-}
+import type { BasketItem } from "@/lib/types"
 
 export default function HomePage() {
   const { items: basketItems, addItem, removeItem, reorderItems, clearBasket, isInBasket } = useBasket()
   const { toast } = useToast()
 
-  const [selectedCurriculum, setSelectedCurriculum] = useState<string>(ALL_VALUE)
-  const [selectedGrade, setSelectedGrade] = useState<string>(ALL_VALUE)
-  const [selectedSubject, setSelectedSubject] = useState<string>(ALL_VALUE)
-  const [selectedArea, setSelectedArea] = useState<string>(ALL_VALUE)
-  const [keyword, setKeyword] = useState("")
   const [showClearDialog, setShowClearDialog] = useState(false)
   const [basketOpen, setBasketOpen] = useState(false)
 
-  const debouncedKeyword = useDebounce(keyword, 300)
+  const addedCodes = new Set(basketItems.map((b) => b.코드))
 
-  const { data: allData = [], isLoading } = useQuery<AchievementStandard[]>({
-    queryKey: ["achievements"],
-    queryFn: async () => {
-      const res = await fetch("/data/achievements-simple.json")
-      if (!res.ok) throw new Error("데이터를 불러올 수 없습니다.")
-      return res.json()
-    },
-  })
-
-  // Derived filter options
-  const curriculumOptions = useMemo(() => {
-    const set = new Set(allData.map((d) => d.교육과정))
-    const arr = Array.from(set)
-    // 2022 개정 우선
-    arr.sort((a, b) => {
-      if (a.includes("2022 개정") && !b.includes("2022 개정")) return -1
-      if (!a.includes("2022 개정") && b.includes("2022 개정")) return 1
-      return a.localeCompare(b)
-    })
-    return arr
-  }, [allData])
-
-  const gradeOptions = useMemo(() => {
-    const filtered = selectedCurriculum === ALL_VALUE
-      ? allData
-      : allData.filter((d) => d.교육과정 === selectedCurriculum)
-    return Array.from(new Set(filtered.map((d) => d.학년군))).sort()
-  }, [allData, selectedCurriculum])
-
-  const subjectOptions = useMemo(() => {
-    const filtered = allData.filter((d) => {
-      if (selectedCurriculum !== ALL_VALUE && d.교육과정 !== selectedCurriculum) return false
-      if (selectedGrade !== ALL_VALUE && d.학년군 !== selectedGrade) return false
-      return true
-    })
-    return Array.from(new Set(filtered.map((d) => d.과목))).sort()
-  }, [allData, selectedCurriculum, selectedGrade])
-
-  const areaOptions = useMemo(() => {
-    const filtered = allData.filter((d) => {
-      if (selectedCurriculum !== ALL_VALUE && d.교육과정 !== selectedCurriculum) return false
-      if (selectedGrade !== ALL_VALUE && d.학년군 !== selectedGrade) return false
-      if (selectedSubject !== ALL_VALUE && d.과목 !== selectedSubject) return false
-      return true
-    })
-    return Array.from(new Set(filtered.map((d) => d.영역))).sort()
-  }, [allData, selectedCurriculum, selectedGrade, selectedSubject])
-
-  // Reset child filters when parent changes
-  useEffect(() => {
-    setSelectedGrade(ALL_VALUE)
-    setSelectedSubject(ALL_VALUE)
-    setSelectedArea(ALL_VALUE)
-  }, [selectedCurriculum])
-
-  useEffect(() => {
-    setSelectedSubject(ALL_VALUE)
-    setSelectedArea(ALL_VALUE)
-  }, [selectedGrade])
-
-  useEffect(() => {
-    setSelectedArea(ALL_VALUE)
-  }, [selectedSubject])
-
-  // Filtered results
-  const filteredData = useMemo(() => {
-    return allData.filter((d) => {
-      if (selectedCurriculum !== ALL_VALUE && d.교육과정 !== selectedCurriculum) return false
-      if (selectedGrade !== ALL_VALUE && d.학년군 !== selectedGrade) return false
-      if (selectedSubject !== ALL_VALUE && d.과목 !== selectedSubject) return false
-      if (selectedArea !== ALL_VALUE && d.영역 !== selectedArea) return false
-      if (debouncedKeyword) {
-        const kw = debouncedKeyword.toLowerCase()
-        return (
-          d.내용.toLowerCase().includes(kw) ||
-          d.코드.toLowerCase().includes(kw) ||
-          d.과목.toLowerCase().includes(kw) ||
-          d.영역.toLowerCase().includes(kw)
-        )
-      }
-      return true
-    })
-  }, [allData, selectedCurriculum, selectedGrade, selectedSubject, selectedArea, debouncedKeyword])
-
-  const handleCopy = useCallback(async (item: AchievementStandard) => {
-    const text = `${item.코드} ${item.내용}`
-    try {
-      await navigator.clipboard.writeText(text)
-      toast({ title: "복사 완료", description: text.slice(0, 40) + "...", duration: 1500 })
-    } catch {
-      toast({ title: "복사 실패", variant: "destructive", duration: 1500 })
+  const handleAddToBasket = useCallback((item: BasketItem) => {
+    if (isInBasket(item.코드)) {
+      toast({ title: "이미 바구니에 있습니다.", duration: 1500 })
+      return
     }
-  }, [toast])
-
-  const handleAddToBasket = useCallback((item: AchievementStandard) => {
-    addItem(item as BasketItem)
+    addItem(item)
     toast({ title: "바구니에 추가됨", description: item.코드, duration: 1500 })
-  }, [addItem, toast])
+  }, [addItem, isInBasket, toast])
 
   const handleRemoveFromBasket = useCallback((code: string) => {
     removeItem(code)
@@ -163,198 +49,19 @@ export default function HomePage() {
     reorderItems(newItems)
   }, [basketItems, reorderItems])
 
-  const hasActiveFilter = selectedCurriculum !== ALL_VALUE || selectedGrade !== ALL_VALUE || selectedSubject !== ALL_VALUE || selectedArea !== ALL_VALUE || keyword
-
   return (
     <div className="flex flex-col lg:flex-row min-h-[calc(100vh-56px)]">
-      {/* Main content */}
-      <div className="flex-1 p-4 lg:p-6 overflow-auto">
-        {/* Search & Filters */}
-        <div className="mb-4 space-y-3">
-          <div className="relative">
-            <span className="material-icons-outlined absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-[18px]">search</span>
-            <Input
-              placeholder="키워드 검색 (성취기준 코드, 내용, 과목, 영역)"
-              value={keyword}
-              onChange={(e) => setKeyword(e.target.value)}
-              className="pl-9"
-              data-testid="keyword-search"
-            />
-            {keyword && (
-              <button
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                onClick={() => setKeyword("")}
-              >
-                <span className="material-icons-outlined text-[18px]">close</span>
-              </button>
-            )}
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <Select value={selectedCurriculum} onValueChange={setSelectedCurriculum}>
-              <SelectTrigger data-testid="filter-curriculum">
-                <SelectValue placeholder="교육과정" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL_VALUE}>전체 교육과정</SelectItem>
-                {curriculumOptions.map((c) => (
-                  <SelectItem key={c} value={c}>{c}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select value={selectedGrade} onValueChange={setSelectedGrade} disabled={gradeOptions.length === 0}>
-              <SelectTrigger data-testid="filter-grade">
-                <SelectValue placeholder="학년군" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL_VALUE}>전체 학년군</SelectItem>
-                {gradeOptions.map((g) => (
-                  <SelectItem key={g} value={g}>{g}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select value={selectedSubject} onValueChange={setSelectedSubject} disabled={subjectOptions.length === 0}>
-              <SelectTrigger data-testid="filter-subject">
-                <SelectValue placeholder="과목" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL_VALUE}>전체 과목</SelectItem>
-                {subjectOptions.map((s) => (
-                  <SelectItem key={s} value={s}>{s}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select value={selectedArea} onValueChange={setSelectedArea} disabled={areaOptions.length === 0}>
-              <SelectTrigger data-testid="filter-area">
-                <SelectValue placeholder="영역" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL_VALUE}>전체 영역</SelectItem>
-                {areaOptions.map((a) => (
-                  <SelectItem key={a} value={a}>{a}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {hasActiveFilter && (
-            <div className="flex items-center gap-2 flex-wrap">
-              {selectedCurriculum !== ALL_VALUE && (
-                <Badge variant="secondary" className="cursor-pointer" onClick={() => setSelectedCurriculum(ALL_VALUE)}>
-                  {selectedCurriculum} ✕
-                </Badge>
-              )}
-              {selectedGrade !== ALL_VALUE && (
-                <Badge variant="secondary" className="cursor-pointer" onClick={() => setSelectedGrade(ALL_VALUE)}>
-                  {selectedGrade} ✕
-                </Badge>
-              )}
-              {selectedSubject !== ALL_VALUE && (
-                <Badge variant="secondary" className="cursor-pointer" onClick={() => setSelectedSubject(ALL_VALUE)}>
-                  {selectedSubject} ✕
-                </Badge>
-              )}
-              {selectedArea !== ALL_VALUE && (
-                <Badge variant="secondary" className="cursor-pointer" onClick={() => setSelectedArea(ALL_VALUE)}>
-                  {selectedArea} ✕
-                </Badge>
-              )}
-              {keyword && (
-                <Badge variant="secondary" className="cursor-pointer" onClick={() => setKeyword("")}>
-                  "{keyword}" ✕
-                </Badge>
-              )}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setSelectedCurriculum(ALL_VALUE)
-                  setSelectedGrade(ALL_VALUE)
-                  setSelectedSubject(ALL_VALUE)
-                  setSelectedArea(ALL_VALUE)
-                  setKeyword("")
-                }}
-              >
-                <span className="material-icons-outlined text-[16px]">filter_alt_off</span>
-                필터 초기화
-              </Button>
-            </div>
-          )}
-        </div>
-
-        {/* Results */}
-        <div className="text-sm text-muted-foreground mb-2">
-          {isLoading ? "데이터 로딩 중..." : `${filteredData.length.toLocaleString()}개 성취기준`}
-        </div>
-
-        {isLoading ? (
-          <div className="flex items-center justify-center py-16">
-            <span className="material-icons-outlined animate-spin text-primary mr-2">refresh</span>
-            데이터를 불러오는 중...
-          </div>
-        ) : filteredData.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-            <span className="material-icons-outlined text-4xl mb-2">search_off</span>
-            <p>검색 결과가 없습니다.</p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {filteredData.map((item) => {
-              const inBasket = isInBasket(item.코드)
-              return (
-                <div
-                  key={item.코드}
-                  className="group border rounded-lg p-3 bg-card hover:bg-accent/30 transition-colors"
-                  data-testid="achievement-item"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap mb-1">
-                        <span className="font-mono text-xs font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded">
-                          {item.코드}
-                        </span>
-                        <span className="text-xs text-muted-foreground">{item.교육과정}</span>
-                        <span className="text-xs text-muted-foreground">{item.학년군}</span>
-                        <span className="text-xs text-muted-foreground">{item.과목}</span>
-                        <span className="text-xs text-muted-foreground">{item.영역}</span>
-                      </div>
-                      <p className="text-sm leading-relaxed">{item.내용}</p>
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        title="복사"
-                        onClick={() => handleCopy(item)}
-                        data-testid="btn-copy"
-                      >
-                        <span className="material-icons-outlined text-[16px]">content_copy</span>
-                      </Button>
-                      <Button
-                        variant={inBasket ? "secondary" : "ghost"}
-                        size="icon-sm"
-                        title={inBasket ? "바구니에서 제거" : "바구니에 추가"}
-                        disabled={inBasket}
-                        onClick={() => handleAddToBasket(item)}
-                        data-testid="btn-add-basket"
-                      >
-                        <span className="material-icons-outlined text-[16px]">
-                          {inBasket ? "shopping_basket" : "add_shopping_cart"}
-                        </span>
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
+      {/* Main content: filter + results */}
+      <div className="flex-1 overflow-hidden flex flex-col">
+        <AchievementFilterPanel
+          onAdd={handleAddToBasket}
+          addedCodes={addedCodes}
+          addLabel="바구니 추가"
+          addedLabel="추가됨"
+        />
       </div>
 
-      {/* Basket sidebar - desktop */}
+      {/* Basket sidebar – desktop */}
       <aside className="hidden lg:flex flex-col w-72 border-l bg-muted/20">
         <BasketSidebar
           items={basketItems}
@@ -365,9 +72,13 @@ export default function HomePage() {
         />
       </aside>
 
-      {/* Basket button - mobile */}
+      {/* Basket FAB – mobile */}
       <div className="lg:hidden fixed bottom-4 right-4 z-30">
-        <Button onClick={() => setBasketOpen(true)} className="rounded-full shadow-lg h-14 w-14" size="icon">
+        <Button
+          onClick={() => setBasketOpen(true)}
+          className="rounded-full shadow-lg h-14 w-14 relative"
+          size="icon"
+        >
           <span className="material-icons-outlined">shopping_basket</span>
           {basketItems.length > 0 && (
             <span className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground text-xs rounded-full h-5 w-5 flex items-center justify-center">
@@ -377,7 +88,7 @@ export default function HomePage() {
         </Button>
       </div>
 
-      {/* Basket dialog - mobile */}
+      {/* Basket dialog – mobile */}
       <Dialog open={basketOpen} onOpenChange={setBasketOpen}>
         <DialogContent className="max-h-[80vh] overflow-hidden flex flex-col">
           <DialogHeader>

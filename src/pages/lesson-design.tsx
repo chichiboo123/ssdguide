@@ -1,22 +1,15 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react"
-import { useQuery } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { AchievementFilterPanel } from "@/components/achievement-filter-panel"
 import { useBasket } from "@/hooks/use-basket"
 import { useToast } from "@/hooks/use-toast"
 import type {
@@ -36,6 +29,7 @@ function genId() {
   return Math.random().toString(36).slice(2, 9)
 }
 
+
 function SectionBadge({ number }: { number: number }) {
   return (
     <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs font-bold shrink-0">
@@ -43,6 +37,42 @@ function SectionBadge({ number }: { number: number }) {
     </span>
   )
 }
+
+// ─── Link sharing helpers ───────────────────────────────────────────────────
+
+function encodeDesign(design: LessonDesign): string {
+  // Strip binary image data to keep URL manageable
+  const exportable: LessonDesign = {
+    ...design,
+    materials: design.materials.map((m) =>
+      m.type === "image" ? { ...m, fileData: undefined } : m
+    ),
+  }
+  return btoa(encodeURIComponent(JSON.stringify(exportable)))
+}
+
+function decodeDesign(encoded: string): LessonDesign | null {
+  try {
+    return JSON.parse(decodeURIComponent(atob(encoded)))
+  } catch {
+    return null
+  }
+}
+
+function getShareParam(): string | null {
+  const params = new URLSearchParams(window.location.search)
+  return params.get("share")
+}
+
+function buildShareUrl(design: LessonDesign): string {
+  const encoded = encodeDesign(design)
+  const url = new URL(window.location.href)
+  url.pathname = "/design"
+  url.search = `?share=${encoded}`
+  return url.toString()
+}
+
+// ─── Main page ──────────────────────────────────────────────────────────────
 
 export default function LessonDesignPage() {
   const { items: basketItems, addItem } = useBasket()
@@ -64,11 +94,42 @@ export default function LessonDesignPage() {
   const [materials, setMaterials] = useState<MaterialEntry[]>([
     { id: genId(), type: "text", content: "" },
   ])
+
   const [showSearchDialog, setShowSearchDialog] = useState(false)
+  const [showExportMenu, setShowExportMenu] = useState(false)
+  const [showShareDialog, setShowShareDialog] = useState(false)
+  const [shareUrl, setShareUrl] = useState("")
+  const [urlCopied, setUrlCopied] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // --- Standards section ---
+  // ── Load shared design from URL on first mount ──────────────────────────
+  useEffect(() => {
+    const shareParam = getShareParam()
+    if (!shareParam) return
+    const data = decodeDesign(shareParam)
+    if (!data) {
+      toast({ title: "공유 링크를 불러올 수 없습니다.", variant: "destructive", duration: 2000 })
+      return
+    }
+    setTitle(data.title || "")
+    setAuthor(data.author || "")
+    setStandards(data.standards || [])
+    setIntent(data.intent || "")
+    setObjective(data.objective || "")
+    setProcess(data.process || "")
+    setUseTableMode(data.useTableMode || false)
+    setProcessSteps(data.processSteps?.length ? data.processSteps : [{ id: genId(), period: "", topic: "", content: "", note: "" }])
+    setEvaluations(data.evaluations?.length ? data.evaluations : [{ id: genId(), subject: "", methods: [], content: "" }])
+    setMaterials(data.materials?.length ? data.materials : [{ id: genId(), type: "text", content: "" }])
+    toast({ title: "공유된 수업 디자인을 불러왔습니다.", duration: 2000 })
+    // Remove the share param from URL without page reload
+    const cleanUrl = new URL(window.location.href)
+    cleanUrl.search = ""
+    window.history.replaceState(null, "", cleanUrl.toString())
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Standards section ───────────────────────────────────────────────────
   const handleSortStandards = useCallback((asc: boolean) => {
     setStandards((prev) => [...prev].sort((a, b) => asc ? a.코드.localeCompare(b.코드) : b.코드.localeCompare(a.코드)))
   }, [])
@@ -97,7 +158,19 @@ export default function LessonDesignPage() {
     }
   }, [standards, toast])
 
-  // --- Process steps ---
+  const standardCodes = useMemo(() => new Set(standards.map((s) => s.코드)), [standards])
+
+  const handleAddStandard = useCallback((item: BasketItem) => {
+    if (standardCodes.has(item.코드)) {
+      toast({ title: "이미 추가된 성취기준입니다.", duration: 1500 })
+      return
+    }
+    setStandards((prev) => [...prev, item])
+    addItem(item)
+    toast({ title: "성취기준 추가됨", description: item.코드, duration: 1500 })
+  }, [standardCodes, addItem, toast])
+
+  // ── Process steps ────────────────────────────────────────────────────────
   const addStep = () => setProcessSteps((p) => [...p, { id: genId(), period: "", topic: "", content: "", note: "" }])
   const removeStep = (id: string) => setProcessSteps((p) => p.filter((s) => s.id !== id))
   const updateStep = (id: string, field: keyof LessonProcessStep, value: string) => {
@@ -117,7 +190,7 @@ export default function LessonDesignPage() {
     }
   }, [processSteps, toast])
 
-  // --- Evaluations ---
+  // ── Evaluations ──────────────────────────────────────────────────────────
   const addEval = () => setEvaluations((p) => [...p, { id: genId(), subject: "", methods: [], content: "" }])
   const removeEval = (id: string) => setEvaluations((p) => p.filter((e) => e.id !== id))
   const moveEval = (index: number, dir: -1 | 1) => {
@@ -129,7 +202,7 @@ export default function LessonDesignPage() {
       return next
     })
   }
-  const updateEval = (id: string, field: keyof Omit<EvaluationEntry, 'id' | 'methods'>, value: string) => {
+  const updateEval = (id: string, field: keyof Omit<EvaluationEntry, "id" | "methods">, value: string) => {
     setEvaluations((p) => p.map((e) => e.id === id ? { ...e, [field]: value } : e))
   }
   const toggleEvalMethod = (id: string, method: string) => {
@@ -142,8 +215,8 @@ export default function LessonDesignPage() {
     }))
   }
 
-  // --- Materials ---
-  const addMaterial = (type: MaterialEntry['type']) => {
+  // ── Materials ────────────────────────────────────────────────────────────
+  const addMaterial = (type: MaterialEntry["type"]) => {
     setMaterials((p) => [...p, { id: genId(), type, content: "" }])
   }
   const removeMaterial = (id: string) => setMaterials((p) => p.filter((m) => m.id !== id))
@@ -158,9 +231,9 @@ export default function LessonDesignPage() {
     reader.readAsDataURL(file)
   }, [])
 
-  // --- Export / Import ---
+  // ── Export / Import ──────────────────────────────────────────────────────
   const buildDesign = useCallback((): LessonDesign => ({
-    title, author, standards, intent, objective, process, useTableMode, processSteps, evaluations, materials
+    title, author, standards, intent, objective, process, useTableMode, processSteps, evaluations, materials,
   }), [title, author, standards, intent, objective, process, useTableMode, processSteps, evaluations, materials])
 
   const handleJsonExport = () => {
@@ -173,6 +246,7 @@ export default function LessonDesignPage() {
     a.click()
     URL.revokeObjectURL(url)
     toast({ title: "JSON 파일 저장 완료", duration: 1500 })
+    setShowExportMenu(false)
   }
 
   const handleJsonImport = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -199,6 +273,7 @@ export default function LessonDesignPage() {
     }
     reader.readAsText(file)
     e.target.value = ""
+    setShowExportMenu(false)
   }
 
   const handleTxtDownload = () => {
@@ -244,6 +319,7 @@ export default function LessonDesignPage() {
     a.click()
     URL.revokeObjectURL(url)
     toast({ title: "TXT 파일 저장 완료", duration: 1500 })
+    setShowExportMenu(false)
   }
 
   const handleCopyAll = async () => {
@@ -289,35 +365,44 @@ export default function LessonDesignPage() {
     } catch {
       toast({ title: "복사 실패", variant: "destructive", duration: 1500 })
     }
+    setShowExportMenu(false)
+  }
+
+  const handleShareLink = () => {
+    const design = buildDesign()
+    const hasImages = design.materials.some((m) => m.type === "image" && m.fileData)
+    const url = buildShareUrl(design)
+    setShareUrl(url)
+    setUrlCopied(false)
+    setShowShareDialog(true)
+    setShowExportMenu(false)
+    if (hasImages) {
+      toast({
+        title: "이미지는 공유 링크에 포함되지 않습니다.",
+        description: "이미지를 제외한 나머지 내용이 공유됩니다.",
+        duration: 3000,
+      })
+    }
+  }
+
+  const copyShareUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl)
+      setUrlCopied(true)
+      setTimeout(() => setUrlCopied(false), 2000)
+    } catch {
+      toast({ title: "복사 실패", variant: "destructive", duration: 1500 })
+    }
   }
 
   return (
-    <div className="max-w-3xl mx-auto p-4 lg:p-6 space-y-6">
-      {/* Header actions */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
+    <div className="max-w-3xl mx-auto p-4 lg:p-6 space-y-6 pb-24">
+      {/* Header */}
+      <div className="flex items-center gap-2">
         <h1 className="text-lg font-semibold flex items-center gap-2">
           <span className="material-icons-outlined text-primary">edit_note</span>
           수업 디자인
         </h1>
-        <div className="flex items-center gap-2 flex-wrap">
-          <Button variant="outline" size="sm" onClick={handleJsonExport}>
-            <span className="material-icons-outlined text-[16px]">download</span>
-            JSON 저장
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
-            <span className="material-icons-outlined text-[16px]">upload</span>
-            JSON 불러오기
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleTxtDownload}>
-            <span className="material-icons-outlined text-[16px]">text_snippet</span>
-            TXT
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleCopyAll}>
-            <span className="material-icons-outlined text-[16px]">content_copy</span>
-            전체 복사
-          </Button>
-          <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleJsonImport} />
-        </div>
       </div>
 
       {/* Step 1: Title */}
@@ -532,77 +617,102 @@ export default function LessonDesignPage() {
         )}
       </section>
 
-      {/* Step 6: Evaluation */}
+      {/* Step 6: Evaluation – unified table */}
       <section className="border rounded-lg p-4 space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <SectionBadge number={6} />
             <h2 className="font-semibold">평가 계획</h2>
+            {evaluations.length > 0 && <Badge variant="secondary">{evaluations.length}</Badge>}
           </div>
           <Button variant="outline" size="sm" onClick={addEval}>
             <span className="material-icons-outlined text-[16px]">add</span>
-            추가
+            평가 추가
           </Button>
         </div>
-        <div className="space-y-3">
-          {evaluations.map((ev, index) => (
-            <div key={ev.id} className="group border rounded-lg p-3 space-y-2 bg-card">
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground font-medium">#{index + 1}</span>
-                <Input
-                  placeholder="평가 대상 / 제목"
-                  value={ev.subject}
-                  onChange={(e) => updateEval(ev.id, "subject", e.target.value)}
-                  className="flex-1"
-                />
-                <button
-                  className="p-0.5 hover:bg-accent rounded opacity-0 group-hover:opacity-100"
-                  onClick={() => moveEval(index, -1)}
-                  disabled={index === 0}
-                >
-                  <span className="material-icons-outlined text-[14px]">keyboard_arrow_up</span>
-                </button>
-                <button
-                  className="p-0.5 hover:bg-accent rounded opacity-0 group-hover:opacity-100"
-                  onClick={() => moveEval(index, 1)}
-                  disabled={index === evaluations.length - 1}
-                >
-                  <span className="material-icons-outlined text-[14px]">keyboard_arrow_down</span>
-                </button>
-                <button
-                  className="p-0.5 hover:bg-destructive/10 hover:text-destructive rounded opacity-0 group-hover:opacity-100"
-                  onClick={() => removeEval(ev.id)}
-                  disabled={evaluations.length === 1}
-                >
-                  <span className="material-icons-outlined text-[14px]">close</span>
-                </button>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground mb-1.5">평가 방법</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {EVAL_METHODS.map((method) => (
-                    <button
-                      key={method}
-                      onClick={() => toggleEvalMethod(ev.id, method)}
-                      className={`text-xs px-2 py-1 rounded-full border transition-colors ${
-                        ev.methods.includes(method)
-                          ? "bg-primary text-primary-foreground border-primary"
-                          : "bg-background border-border hover:bg-accent"
-                      }`}
-                    >
-                      {method}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <Textarea
-                placeholder="평가 내용을 입력하세요"
-                value={ev.content}
-                onChange={(e) => updateEval(ev.id, "content", e.target.value)}
-                className="min-h-[80px]"
-              />
-            </div>
-          ))}
+
+        <div className="overflow-x-auto rounded-lg border">
+          <table className="w-full text-sm border-collapse min-w-[600px]">
+            <thead>
+              <tr className="bg-muted text-left">
+                <th className="border-b px-3 py-2 w-8 text-center text-muted-foreground font-medium">#</th>
+                <th className="border-b px-3 py-2 w-40 font-medium">평가 대상/제목</th>
+                <th className="border-b px-3 py-2 font-medium">평가 방법</th>
+                <th className="border-b px-3 py-2 font-medium">평가 내용</th>
+                <th className="border-b px-3 py-2 w-16 text-center font-medium">순서/삭제</th>
+              </tr>
+            </thead>
+            <tbody>
+              {evaluations.map((ev, index) => (
+                <tr key={ev.id} className="group border-b last:border-b-0 align-top">
+                  <td className="px-3 py-2 text-center text-xs text-muted-foreground font-medium">
+                    {index + 1}
+                  </td>
+                  <td className="px-2 py-2">
+                    <Input
+                      placeholder="제목 입력"
+                      value={ev.subject}
+                      onChange={(e) => updateEval(ev.id, "subject", e.target.value)}
+                      className="text-sm h-8"
+                    />
+                  </td>
+                  <td className="px-2 py-2">
+                    <div className="flex flex-wrap gap-1">
+                      {EVAL_METHODS.map((method) => (
+                        <button
+                          key={method}
+                          onClick={() => toggleEvalMethod(ev.id, method)}
+                          className={`text-xs px-2 py-0.5 rounded-full border transition-colors whitespace-nowrap ${
+                            ev.methods.includes(method)
+                              ? "bg-primary text-primary-foreground border-primary"
+                              : "bg-background border-border hover:bg-accent"
+                          }`}
+                        >
+                          {method}
+                        </button>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="px-2 py-2">
+                    <Textarea
+                      placeholder="평가 내용"
+                      value={ev.content}
+                      onChange={(e) => updateEval(ev.id, "content", e.target.value)}
+                      className="min-h-[72px] text-sm resize-none"
+                    />
+                  </td>
+                  <td className="px-2 py-2">
+                    <div className="flex flex-col items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        className="p-0.5 hover:bg-accent rounded disabled:opacity-30"
+                        onClick={() => moveEval(index, -1)}
+                        disabled={index === 0}
+                        title="위로"
+                      >
+                        <span className="material-icons-outlined text-[14px]">keyboard_arrow_up</span>
+                      </button>
+                      <button
+                        className="p-0.5 hover:bg-accent rounded disabled:opacity-30"
+                        onClick={() => moveEval(index, 1)}
+                        disabled={index === evaluations.length - 1}
+                        title="아래로"
+                      >
+                        <span className="material-icons-outlined text-[14px]">keyboard_arrow_down</span>
+                      </button>
+                      <button
+                        className="p-0.5 hover:bg-destructive/10 hover:text-destructive rounded disabled:opacity-30"
+                        onClick={() => removeEval(ev.id)}
+                        disabled={evaluations.length === 1}
+                        title="삭제"
+                      >
+                        <span className="material-icons-outlined text-[14px]">delete_outline</span>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </section>
 
@@ -707,118 +817,140 @@ export default function LessonDesignPage() {
         </div>
       </section>
 
-      {/* Standards search dialog */}
+      {/* Hidden JSON import input */}
+      <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleJsonImport} />
+
+      {/* ── Standards search dialog (full filter panel) ── */}
       <Dialog open={showSearchDialog} onOpenChange={setShowSearchDialog}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col p-0">
-          <DialogHeader className="p-4 border-b">
+        <DialogContent className="max-w-4xl h-[85vh] overflow-hidden flex flex-col p-0">
+          <DialogHeader className="p-4 border-b shrink-0">
             <DialogTitle>성취기준 검색 및 추가</DialogTitle>
           </DialogHeader>
           <div className="flex-1 overflow-hidden">
-            <SearchInDialog
-              currentStandards={standards}
-              onAdd={(item) => {
-                const exists = standards.some((s) => s.코드 === item.코드)
-                if (!exists) {
-                  setStandards((prev) => [...prev, item])
-                  addItem(item)
-                  toast({ title: "성취기준 추가됨", description: item.코드, duration: 1500 })
-                } else {
-                  toast({ title: "이미 추가된 성취기준입니다.", duration: 1500 })
-                }
-              }}
+            <AchievementFilterPanel
+              onAdd={handleAddStandard}
+              addedCodes={standardCodes}
+              addLabel="추가"
+              addedLabel="추가됨"
             />
           </div>
         </DialogContent>
       </Dialog>
-    </div>
-  )
-}
 
-// Embedded search in dialog
-function SearchInDialog({
-  currentStandards,
-  onAdd,
-}: {
-  currentStandards: BasketItem[]
-  onAdd: (item: BasketItem) => void
-}) {
-  const [keyword, setKeyword] = useState("")
-  const [selectedSubject, setSelectedSubject] = useState("__all__")
-  const debouncedKw = useDebounce(keyword, 300)
-  const { data: allData = [], isLoading } = useQuery<BasketItem[]>({
-    queryKey: ["achievements"],
-    queryFn: async () => {
-      const res = await fetch("/data/achievements-simple.json")
-      return res.json()
-    },
-  })
-
-  const subjects = useMemo(() => Array.from(new Set(allData.map((d) => d.과목))).sort(), [allData])
-
-  const filtered = useMemo(() => {
-    return allData.filter((d) => {
-      if (selectedSubject !== "__all__" && d.과목 !== selectedSubject) return false
-      if (debouncedKw) {
-        const kw = debouncedKw.toLowerCase()
-        return d.내용.toLowerCase().includes(kw) || d.코드.toLowerCase().includes(kw)
-      }
-      return true
-    }).slice(0, 100)
-  }, [allData, selectedSubject, debouncedKw])
-
-  return (
-    <div className="flex flex-col h-full">
-      <div className="p-3 border-b space-y-2">
-        <Input placeholder="키워드 검색" value={keyword} onChange={(e) => setKeyword(e.target.value)} />
-        <Select value={selectedSubject} onValueChange={setSelectedSubject}>
-          <SelectTrigger>
-            <SelectValue placeholder="과목 선택" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all__">전체 과목</SelectItem>
-            {subjects.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="flex-1 overflow-auto p-2 space-y-1.5">
-        {isLoading ? (
-          <div className="text-center py-8 text-muted-foreground">로딩 중...</div>
-        ) : filtered.map((item) => {
-          const isAdded = currentStandards.some((s) => s.코드 === item.코드)
-          return (
-            <div key={item.코드} className="flex items-start gap-2 border rounded p-2.5 text-sm hover:bg-accent/30 transition-colors">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
-                  <span className="font-mono text-xs font-semibold text-primary">{item.코드}</span>
-                  <span className="text-xs text-muted-foreground">{item.교육과정}</span>
-                  <span className="text-xs text-muted-foreground">{item.학년군}</span>
-                  <span className="text-xs text-muted-foreground">{item.과목}</span>
-                  <span className="text-xs text-muted-foreground">{item.영역}</span>
-                </div>
-                <p>{item.내용}</p>
-              </div>
-              <Button
-                size="sm"
-                variant={isAdded ? "secondary" : "default"}
-                disabled={isAdded}
-                onClick={() => onAdd(item)}
-                className="shrink-0"
-              >
-                {isAdded ? "추가됨" : "추가"}
+      {/* ── Share link dialog ── */}
+      <Dialog open={showShareDialog} onOpenChange={setShowShareDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <span className="material-icons-outlined text-primary">link</span>
+              링크 공유
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 mt-2">
+            <p className="text-sm text-muted-foreground">
+              아래 링크를 통해 현재 수업 디자인을 공유할 수 있습니다.
+              이미지 파일은 공유 링크에 포함되지 않습니다.
+            </p>
+            <div className="flex gap-2">
+              <Input
+                readOnly
+                value={shareUrl}
+                className="text-xs font-mono flex-1"
+                onClick={(e) => (e.target as HTMLInputElement).select()}
+              />
+              <Button onClick={copyShareUrl} variant={urlCopied ? "secondary" : "default"} className="shrink-0">
+                <span className="material-icons-outlined text-[16px]">
+                  {urlCopied ? "check" : "content_copy"}
+                </span>
+                {urlCopied ? "복사됨" : "복사"}
               </Button>
             </div>
-          )
-        })}
+            <p className="text-xs text-muted-foreground">
+              링크를 열면 동일한 수업 디자인 내용이 복원됩니다.
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Floating Export FAB ── */}
+      <div className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-2">
+        {/* Export menu */}
+        {showExportMenu && (
+          <>
+            {/* Backdrop */}
+            <div
+              className="fixed inset-0 -z-10"
+              onClick={() => setShowExportMenu(false)}
+            />
+            {/* Menu items */}
+            <div className="flex flex-col items-end gap-2 mb-1">
+              <FabMenuItem
+                icon="link"
+                label="링크 공유"
+                onClick={handleShareLink}
+              />
+              <FabMenuItem
+                icon="content_copy"
+                label="전체 복사"
+                onClick={handleCopyAll}
+              />
+              <FabMenuItem
+                icon="text_snippet"
+                label="TXT 저장"
+                onClick={handleTxtDownload}
+              />
+              <FabMenuItem
+                icon="upload"
+                label="JSON 불러오기"
+                onClick={() => {
+                  setShowExportMenu(false)
+                  fileInputRef.current?.click()
+                }}
+              />
+              <FabMenuItem
+                icon="download"
+                label="JSON 저장"
+                onClick={handleJsonExport}
+              />
+            </div>
+          </>
+        )}
+        {/* Main FAB button */}
+        <button
+          onClick={() => setShowExportMenu((v) => !v)}
+          className={`w-14 h-14 rounded-full shadow-lg flex items-center justify-center transition-all duration-200 ${
+            showExportMenu
+              ? "bg-muted text-foreground rotate-45"
+              : "bg-primary text-primary-foreground hover:bg-primary/90"
+          }`}
+          title="내보내기 메뉴"
+        >
+          <span className="material-icons-outlined text-[24px]">
+            {showExportMenu ? "close" : "ios_share"}
+          </span>
+        </button>
       </div>
     </div>
   )
 }
 
-function useDebounce<T>(value: T, delay: number): T {
-  const [debounced, setDebounced] = useState(value)
-  useEffect(() => {
-    const timer = setTimeout(() => setDebounced(value), delay)
-    return () => clearTimeout(timer)
-  }, [value, delay])
-  return debounced
+// ── FAB menu item sub-component ─────────────────────────────────────────────
+function FabMenuItem({
+  icon,
+  label,
+  onClick,
+}: {
+  icon: string
+  label: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-2 bg-background border shadow-md rounded-full px-4 py-2 text-sm font-medium hover:bg-accent transition-colors"
+    >
+      <span className="material-icons-outlined text-[18px] text-primary">{icon}</span>
+      {label}
+    </button>
+  )
 }
