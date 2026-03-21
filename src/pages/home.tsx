@@ -127,15 +127,15 @@ export default function HomePage() {
     )).sort()
   }, [allData, selectedCurriculum, selectedGrade, selectedSubject])
 
-  // Validate selected child values against available options (fixes 누리과정 filter bug)
+  // Clamp child filter values to their available options.
+  // Cascade-reset handlers already set children to ALL_VALUE synchronously,
+  // so these are only needed for localStorage-restored stale values.
+  // Do NOT sync these back to state via useEffect — that creates a 2-render
+  // cycle that corrupts Radix UI Select's internal state (especially for
+  // 누리과정 which has only 1 grade/subject option).
   const validGrade = gradeOptions.includes(selectedGrade) ? selectedGrade : ALL_VALUE
   const validSubject = subjectOptions.includes(selectedSubject) ? selectedSubject : ALL_VALUE
   const validArea = areaOptions.includes(selectedArea) ? selectedArea : ALL_VALUE
-
-  // Sync validated values back to state when they differ
-  useEffect(() => { if (validGrade !== selectedGrade) setSelectedGrade(validGrade) }, [validGrade, selectedGrade])
-  useEffect(() => { if (validSubject !== selectedSubject) setSelectedSubject(validSubject) }, [validSubject, selectedSubject])
-  useEffect(() => { if (validArea !== selectedArea) setSelectedArea(validArea) }, [validArea, selectedArea])
 
   // Direct handlers — cascade-reset children immediately
   const handleCurriculumChange = useCallback((value: string) => {
@@ -339,7 +339,7 @@ export default function HomePage() {
 
             {/* 4-level filters — key props force remount on parent change (filter bug fix) */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <Select value={selectedCurriculum} onValueChange={handleCurriculumChange}>
+              <Select key={`curriculum-${selectedCurriculum}`} value={selectedCurriculum} onValueChange={handleCurriculumChange}>
                 <SelectTrigger data-testid="filter-curriculum" className="rounded-xl h-10">
                   <SelectValue placeholder="교육과정" />
                 </SelectTrigger>
@@ -470,11 +470,11 @@ export default function HomePage() {
           ) : (
             <>
               <div className="space-y-3">
-                {displayedData.map((item) => {
+                {displayedData.map((item, idx) => {
                   const inBasket = isInBasket(item.코드)
                   return (
                     <div
-                      key={item.코드}
+                      key={`${item.코드}-${idx}`}
                       className="group bg-card border rounded-xl p-4 hover:shadow-md hover:border-primary/20 transition-all duration-200"
                       data-testid="achievement-item"
                     >
