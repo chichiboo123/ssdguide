@@ -19,9 +19,9 @@ function AppContent() {
           <Route path="/design" component={LessonDesignPage} />
           <Route>
             <div className="flex flex-col items-center justify-center min-h-[50vh] text-muted-foreground">
-              <span className="material-icons-outlined text-6xl mb-4 opacity-30">error_outline</span>
-              <h1 className="text-xl font-semibold mb-2">페이지를 찾을 수 없습니다</h1>
-              <a href="#/" className="text-primary hover:underline text-sm">홈으로 돌아가기</a>
+              <span className="material-icons-outlined text-[64px] mb-4 opacity-30">error_outline</span>
+              <h1 className="text-2xl font-semibold mb-2">페이지를 찾을 수 없습니다</h1>
+              <a href="/" className="text-primary hover:underline mt-2">홈으로 돌아가기</a>
             </div>
           </Route>
         </Switch>
