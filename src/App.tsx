@@ -1,4 +1,5 @@
-import { Route, Switch } from "wouter"
+import { Route, Switch, Router } from "wouter"
+import { useHashLocation } from "wouter/use-hash-location"
 import { QueryClientProvider } from "@tanstack/react-query"
 import { queryClient } from "@/lib/queryClient"
 import { AppHeader } from "@/components/app-header"
@@ -33,7 +34,9 @@ function AppContent() {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AppContent />
+      <Router hook={useHashLocation}>
+        <AppContent />
+      </Router>
     </QueryClientProvider>
   )
 }
