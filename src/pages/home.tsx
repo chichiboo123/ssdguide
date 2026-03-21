@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
 import {
   Select,
   SelectContent,
@@ -59,7 +58,9 @@ export default function HomePage() {
   const [selectedArea, setSelectedArea] = useState<string>(savedFilters.current?.area || ALL_VALUE)
   const [keyword, setKeyword] = useState(savedFilters.current?.keyword || "")
   const [showClearDialog, setShowClearDialog] = useState(false)
-  const [basketOpen, setBasketOpen] = useState(false)
+  const [basketOpen, setBasketOpen] = useState(false)        // mobile dialog
+  const [sidebarVisible, setSidebarVisible] = useState(true) // desktop sidebar toggle
+  const [displayCount, setDisplayCount] = useState(PAGE_SIZE)
 
   const debouncedKeyword = useDebounce(keyword, 300)
   const searchSectionRef = useRef<HTMLDivElement>(null)
@@ -75,7 +76,7 @@ export default function HomePage() {
     })
   }, [selectedCurriculum, selectedGrade, selectedSubject, selectedArea, keyword])
 
-  const { data: allData = [], isLoading } = useQuery<AchievementStandard[]>({
+  const { data: allData = [], isLoading, isError } = useQuery<AchievementStandard[]>({
     queryKey: ["achievements"],
     queryFn: async () => {
       const res = await fetch("/achievements-simple.json")
@@ -84,7 +85,7 @@ export default function HomePage() {
     },
   })
 
-  // Derived filter options
+  // ── Filter options (derived) ──────────────────────────────────────────────
   const curriculumOptions = useMemo(() => {
     const set = new Set(allData.map((d) => d.교육과정))
     const arr = Array.from(set)
@@ -104,22 +105,24 @@ export default function HomePage() {
   }, [allData, selectedCurriculum])
 
   const subjectOptions = useMemo(() => {
-    const filtered = allData.filter((d) => {
-      if (selectedCurriculum !== ALL_VALUE && d.교육과정 !== selectedCurriculum) return false
-      if (selectedGrade !== ALL_VALUE && d.학년군 !== selectedGrade) return false
-      return true
-    })
-    return Array.from(new Set(filtered.map((d) => d.과목))).sort()
+    return Array.from(new Set(
+      allData.filter((d) => {
+        if (selectedCurriculum !== ALL_VALUE && d.교육과정 !== selectedCurriculum) return false
+        if (selectedGrade !== ALL_VALUE && d.학년군 !== selectedGrade) return false
+        return true
+      }).map((d) => d.과목)
+    )).sort()
   }, [allData, selectedCurriculum, selectedGrade])
 
   const areaOptions = useMemo(() => {
-    const filtered = allData.filter((d) => {
-      if (selectedCurriculum !== ALL_VALUE && d.교육과정 !== selectedCurriculum) return false
-      if (selectedGrade !== ALL_VALUE && d.학년군 !== selectedGrade) return false
-      if (selectedSubject !== ALL_VALUE && d.과목 !== selectedSubject) return false
-      return true
-    })
-    return Array.from(new Set(filtered.map((d) => d.영역))).sort()
+    return Array.from(new Set(
+      allData.filter((d) => {
+        if (selectedCurriculum !== ALL_VALUE && d.교육과정 !== selectedCurriculum) return false
+        if (selectedGrade !== ALL_VALUE && d.학년군 !== selectedGrade) return false
+        if (selectedSubject !== ALL_VALUE && d.과목 !== selectedSubject) return false
+        return true
+      }).map((d) => d.영역)
+    )).sort()
   }, [allData, selectedCurriculum, selectedGrade, selectedSubject])
 
   // Validate selected values against available options (fixes 누리과정 filter bug)
@@ -157,7 +160,12 @@ export default function HomePage() {
     setSelectedArea(ALL_VALUE)
   }, [])
 
-  // Filtered results
+  // Reset pagination whenever active filters change
+  useEffect(() => {
+    setDisplayCount(PAGE_SIZE)
+  }, [debouncedKeyword, selectedCurriculum, selectedGrade, selectedSubject, selectedArea])
+
+  // ── Filtered results ──────────────────────────────────────────────────────
   const filteredData = useMemo(() => {
     return allData.filter((d) => {
       if (selectedCurriculum !== ALL_VALUE && d.교육과정 !== selectedCurriculum) return false
@@ -177,11 +185,14 @@ export default function HomePage() {
     })
   }, [allData, selectedCurriculum, validGrade, validSubject, validArea, debouncedKeyword])
 
+  const displayedData = useMemo(() => filteredData.slice(0, displayCount), [filteredData, displayCount])
+
+  // ── Actions ───────────────────────────────────────────────────────────────
   const handleCopy = useCallback(async (item: AchievementStandard) => {
     const text = `${item.코드} ${item.내용}`
     try {
       await navigator.clipboard.writeText(text)
-      toast({ title: "복사 완료", description: text.slice(0, 40) + "...", duration: 1500 })
+      toast({ title: "복사 완료", description: item.코드, duration: 1500 })
     } catch {
       toast({ title: "복사 실패", variant: "destructive", duration: 1500 })
     }
@@ -199,16 +210,16 @@ export default function HomePage() {
 
   const handleMoveUp = useCallback((index: number) => {
     if (index === 0) return
-    const newItems = [...basketItems]
-    ;[newItems[index - 1], newItems[index]] = [newItems[index], newItems[index - 1]]
-    reorderItems(newItems)
+    const n = [...basketItems]
+    ;[n[index - 1], n[index]] = [n[index], n[index - 1]]
+    reorderItems(n)
   }, [basketItems, reorderItems])
 
   const handleMoveDown = useCallback((index: number) => {
     if (index === basketItems.length - 1) return
-    const newItems = [...basketItems]
-    ;[newItems[index], newItems[index + 1]] = [newItems[index + 1], newItems[index]]
-    reorderItems(newItems)
+    const n = [...basketItems]
+    ;[n[index], n[index + 1]] = [n[index + 1], n[index]]
+    reorderItems(n)
   }, [basketItems, reorderItems])
 
   const hasActiveFilter = selectedCurriculum !== ALL_VALUE || validGrade !== ALL_VALUE || validSubject !== ALL_VALUE || validArea !== ALL_VALUE || keyword
@@ -225,6 +236,7 @@ export default function HomePage() {
     setKeyword("")
   }, [])
 
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-[calc(100vh-56px)]">
       {/* ──── Hero Section ──── */}
@@ -536,10 +548,10 @@ export default function HomePage() {
               {basketItems.length}
             </span>
           )}
-        </Button>
+        </button>
       </div>
 
-      {/* Basket dialog - mobile */}
+      {/* ── Basket dialog (mobile) ──────────────────────────────────────── */}
       <Dialog open={basketOpen} onOpenChange={setBasketOpen}>
         <DialogContent className="max-h-[85vh] overflow-hidden flex flex-col rounded-t-2xl sm:rounded-2xl">
           <DialogHeader>
@@ -554,21 +566,24 @@ export default function HomePage() {
               onRemove={handleRemoveFromBasket}
               onMoveUp={handleMoveUp}
               onMoveDown={handleMoveDown}
-              onClear={() => setShowClearDialog(true)}
+              onClear={() => { setShowClearDialog(true); setBasketOpen(false) }}
               compact
             />
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Clear basket confirmation */}
+      {/* ── Clear basket confirmation ───────────────────────────────────── */}
       <Dialog open={showClearDialog} onOpenChange={setShowClearDialog}>
         <DialogContent className="sm:rounded-2xl">
           <DialogHeader>
-            <DialogTitle>바구니 비우기</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <span className="material-icons-outlined text-destructive text-[20px]">delete_sweep</span>
+              바구니 비우기
+            </DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            바구니의 모든 항목({basketItems.length}개)을 삭제하시겠습니까?
+          <p className="text-sm text-muted-foreground mt-1">
+            바구니의 모든 항목 <strong className="text-foreground">{basketItems.length}개</strong>를 삭제하시겠습니까?
           </p>
           <div className="flex justify-end gap-2 mt-4">
             <Button variant="outline" onClick={() => setShowClearDialog(false)} className="rounded-xl">
@@ -592,16 +607,31 @@ export default function HomePage() {
   )
 }
 
+// ─── Filter Chip ─────────────────────────────────────────────────────────────
+function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }) {
+  return (
+    <button
+      onClick={onRemove}
+      className="inline-flex items-center gap-1 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full hover:bg-primary/20 transition-colors font-medium"
+    >
+      {label}
+      <span className="material-icons-outlined text-[11px]">close</span>
+    </button>
+  )
+}
+
+// ─── Basket Sidebar ──────────────────────────────────────────────────────────
 interface BasketSidebarProps {
   items: BasketItem[]
   onRemove: (code: string) => void
   onMoveUp: (index: number) => void
   onMoveDown: (index: number) => void
   onClear: () => void
+  onClose?: () => void
   compact?: boolean
 }
 
-function BasketSidebar({ items, onRemove, onMoveUp, onMoveDown, onClear, compact }: BasketSidebarProps) {
+function BasketSidebar({ items, onRemove, onMoveUp, onMoveDown, onClear, onClose, compact }: BasketSidebarProps) {
   return (
     <div className={compact ? "" : "flex flex-col h-full"}>
       <div className="flex items-center justify-between p-4 border-b">
@@ -643,7 +673,7 @@ function BasketSidebar({ items, onRemove, onMoveUp, onMoveDown, onClear, compact
                   onClick={() => onMoveDown(index)}
                   disabled={index === items.length - 1}
                 >
-                  <span className="material-icons-outlined text-[14px]">keyboard_arrow_down</span>
+                  <span className="material-icons-outlined text-[14px]">close</span>
                 </button>
               </div>
               <div className="flex-1 min-w-0">
@@ -661,15 +691,16 @@ function BasketSidebar({ items, onRemove, onMoveUp, onMoveDown, onClear, compact
         )}
       </div>
 
+      {/* Footer CTA */}
       {items.length > 0 && (
-        <div className="p-3 border-t">
-          <a
+        <div className="p-3 border-t border-border/60 shrink-0">
+          <Link
             href="/design"
             className="flex items-center justify-center gap-2 w-full rounded-xl bg-primary text-white px-3 py-2.5 text-sm font-semibold hover:bg-primary/90 transition-colors shadow-sm"
           >
             <span className="material-icons-outlined text-[18px]">edit_note</span>
             수업 디자인하기
-          </a>
+          </Link>
         </div>
       )}
     </div>

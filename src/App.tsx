@@ -1,4 +1,5 @@
-import { Route, Switch } from "wouter"
+import { Route, Switch, Router } from "wouter"
+import { useHashLocation } from "wouter/use-hash-location"
 import { QueryClientProvider } from "@tanstack/react-query"
 import { queryClient } from "@/lib/queryClient"
 import { AppHeader } from "@/components/app-header"
@@ -10,9 +11,9 @@ import LessonDesignPage from "@/pages/lesson-design"
 function AppContent() {
   const { items } = useBasket()
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex flex-col">
       <AppHeader basketCount={items.length} />
-      <main>
+      <main className="flex-1">
         <Switch>
           <Route path="/" component={HomePage} />
           <Route path="/design" component={LessonDesignPage} />
@@ -25,6 +26,16 @@ function AppContent() {
           </Route>
         </Switch>
       </main>
+      <footer className="border-t border-border/60 bg-card py-4 text-center">
+        <a
+          href="https://litt.ly/chichiboo"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs text-muted-foreground hover:text-primary transition-colors"
+        >
+          Created by. 교육뮤지컬 꿈꾸는 치수쌤
+        </a>
+      </footer>
       <Toaster />
     </div>
   )
@@ -33,7 +44,9 @@ function AppContent() {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AppContent />
+      <Router hook={useHashLocation}>
+        <AppContent />
+      </Router>
     </QueryClientProvider>
   )
 }
