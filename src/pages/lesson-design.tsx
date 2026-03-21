@@ -506,24 +506,12 @@ export default function LessonDesignPage() {
               variant={!useTableMode ? "default" : "outline"}
               size="sm"
               onClick={() => setUseTableMode(false)}
-              className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-md transition-all font-medium ${
-                !useTableMode ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-              }`}
             >
               <span className="material-icons-outlined text-[14px]">notes</span>
               자유 작성
-            </button>
-            <button
-              onClick={() => setUseTableMode(true)}
-              className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-md transition-all font-medium ${
-                useTableMode ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <span className="material-icons-outlined text-[14px]">table_chart</span>
-              표 형식
-            </button>
+            </Button>
           </div>
-        </SectionHeader>
+        </div>
 
         {useTableMode ? (
           <div className="space-y-2">
@@ -616,8 +604,8 @@ export default function LessonDesignPage() {
           <Button variant="outline" size="sm" onClick={addEval}>
             <span className="material-icons-outlined text-[16px]">add</span>
             추가
-          </button>
-        </SectionHeader>
+          </Button>
+        </div>
         <div className="space-y-3">
           {evaluations.map((ev, index) => (
             <div key={ev.id} className="group bg-muted/30 border border-border/60 rounded-lg p-4 space-y-3">
