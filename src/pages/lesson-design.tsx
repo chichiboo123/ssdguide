@@ -79,9 +79,16 @@ function getShareParam(): string | null {
 
 function buildShareUrl(design: LessonDesign): string {
   const encoded = encodeDesign(design)
-  // Hash routing: put share param in query string, hash stays as /#/design
-  const url = new URL(window.location.origin)
-  url.search = `?share=${encoded}`
+  // Use the app's actual deployment base (e.g. /ssdguide/ on GitHub Pages).
+  // window.location.origin alone omits the repo sub-path, causing a 404.
+  const base = window.location.origin + import.meta.env.BASE_URL
+  const url = new URL(base)
+  // Use URLSearchParams.set() so base64's '+' chars are percent-encoded,
+  // preventing URLSearchParams.get() from silently converting them to spaces.
+  const params = new URLSearchParams()
+  params.set("share", encoded)
+  url.search = params.toString()
+  // Hash routing: #/design routes to LessonDesignPage without an HTTP request
   url.hash = "#/design"
   return url.toString()
 }
