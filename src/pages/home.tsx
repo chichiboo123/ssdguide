@@ -21,6 +21,7 @@ import { useToast } from "@/hooks/use-toast"
 import type { AchievementStandard, BasketItem } from "@/lib/types"
 
 const ALL_VALUE = "__all__"
+const PAGE_SIZE = 50
 
 function useDebounce<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value)
@@ -31,6 +32,54 @@ function useDebounce<T>(value: T, delay: number): T {
   return debounced
 }
 
+// ─── Hero Section ───────────────────────────────────────────────────────────
+function HeroSection({ totalCount, isLoading }: { totalCount: number; isLoading: boolean }) {
+  return (
+    <div className="relative overflow-hidden px-6 py-10 sm:py-14">
+      {/* decorative blobs */}
+      <div className="pointer-events-none absolute -top-16 -right-16 w-72 h-72 rounded-full bg-primary/10 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-16 -left-8 w-56 h-56 rounded-full bg-accent/40 blur-3xl" />
+
+      <div className="relative max-w-xl">
+        <span className="inline-flex items-center gap-1.5 bg-primary/10 text-primary text-xs font-semibold px-2.5 py-1 rounded-full border border-primary/20 mb-4">
+          <span className="material-icons-outlined text-[13px]">auto_stories</span>
+          성수동 · Seongsu-dong
+        </span>
+
+        <h1 className="text-2xl sm:text-3xl font-bold text-foreground leading-snug mb-3">
+          성취기준, 수업을 함께<br />디자인하는 동료
+        </h1>
+
+        <p className="text-sm text-muted-foreground leading-relaxed mb-7 max-w-md">
+          국가 교육과정 성취기준을 검색하고 바구니에 담아 보세요.
+          7단계 수업 디자인 폼으로 체계적인 수업 계획을 완성할 수 있습니다.
+        </p>
+
+        <div className="flex items-center gap-4 flex-wrap">
+          <StatChip icon="menu_book" value={isLoading ? "—" : `${totalCount.toLocaleString()}개`} label="성취기준" />
+          <StatChip icon="school" value="3종" label="교육과정" />
+          <StatChip icon="edit_note" value="7단계" label="수업 디자인" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function StatChip({ icon, value, label }: { icon: string; value: string; label: string }) {
+  return (
+    <div className="flex items-center gap-2 bg-card border border-border/60 rounded-xl px-3 py-2 shadow-sm">
+      <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+        <span className="material-icons-outlined text-primary text-[15px]">{icon}</span>
+      </div>
+      <div>
+        <div className="text-sm font-bold text-foreground leading-none">{value}</div>
+        <div className="text-[11px] text-muted-foreground mt-0.5">{label}</div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Main Page ───────────────────────────────────────────────────────────────
 export default function HomePage() {
   const { items: basketItems, addItem, removeItem, reorderItems, clearBasket, isInBasket } = useBasket()
   const { toast } = useToast()
@@ -41,7 +90,9 @@ export default function HomePage() {
   const [selectedArea, setSelectedArea] = useState<string>(ALL_VALUE)
   const [keyword, setKeyword] = useState("")
   const [showClearDialog, setShowClearDialog] = useState(false)
-  const [basketOpen, setBasketOpen] = useState(false)
+  const [basketOpen, setBasketOpen] = useState(false)        // mobile dialog
+  const [sidebarVisible, setSidebarVisible] = useState(true) // desktop sidebar toggle
+  const [displayCount, setDisplayCount] = useState(PAGE_SIZE)
 
   const debouncedKeyword = useDebounce(keyword, 300)
 
@@ -54,9 +105,9 @@ export default function HomePage() {
     },
   })
 
+  // ── Filter options (derived) ──────────────────────────────────────────────
   const curriculumOptions = useMemo(() => {
-    const set = new Set(allData.map((d) => d.교육과정))
-    const arr = Array.from(set)
+    const arr = Array.from(new Set(allData.map((d) => d.교육과정)))
     arr.sort((a, b) => {
       if (a.includes("2022 개정") && !b.includes("2022 개정")) return -1
       if (!a.includes("2022 개정") && b.includes("2022 개정")) return 1
@@ -73,39 +124,51 @@ export default function HomePage() {
   }, [allData, selectedCurriculum])
 
   const subjectOptions = useMemo(() => {
-    const filtered = allData.filter((d) => {
-      if (selectedCurriculum !== ALL_VALUE && d.교육과정 !== selectedCurriculum) return false
-      if (selectedGrade !== ALL_VALUE && d.학년군 !== selectedGrade) return false
-      return true
-    })
-    return Array.from(new Set(filtered.map((d) => d.과목))).sort()
+    return Array.from(new Set(
+      allData.filter((d) => {
+        if (selectedCurriculum !== ALL_VALUE && d.교육과정 !== selectedCurriculum) return false
+        if (selectedGrade !== ALL_VALUE && d.학년군 !== selectedGrade) return false
+        return true
+      }).map((d) => d.과목)
+    )).sort()
   }, [allData, selectedCurriculum, selectedGrade])
 
   const areaOptions = useMemo(() => {
-    const filtered = allData.filter((d) => {
-      if (selectedCurriculum !== ALL_VALUE && d.교육과정 !== selectedCurriculum) return false
-      if (selectedGrade !== ALL_VALUE && d.학년군 !== selectedGrade) return false
-      if (selectedSubject !== ALL_VALUE && d.과목 !== selectedSubject) return false
-      return true
-    })
-    return Array.from(new Set(filtered.map((d) => d.영역))).sort()
+    return Array.from(new Set(
+      allData.filter((d) => {
+        if (selectedCurriculum !== ALL_VALUE && d.교육과정 !== selectedCurriculum) return false
+        if (selectedGrade !== ALL_VALUE && d.학년군 !== selectedGrade) return false
+        if (selectedSubject !== ALL_VALUE && d.과목 !== selectedSubject) return false
+        return true
+      }).map((d) => d.영역)
+    )).sort()
   }, [allData, selectedCurriculum, selectedGrade, selectedSubject])
 
-  useEffect(() => {
+  // ── Filter handlers — synchronous cascade reset (bug fix) ─────────────────
+  const handleCurriculumChange = useCallback((value: string) => {
+    setSelectedCurriculum(value)
     setSelectedGrade(ALL_VALUE)
     setSelectedSubject(ALL_VALUE)
     setSelectedArea(ALL_VALUE)
-  }, [selectedCurriculum])
+  }, [])
 
-  useEffect(() => {
+  const handleGradeChange = useCallback((value: string) => {
+    setSelectedGrade(value)
     setSelectedSubject(ALL_VALUE)
     setSelectedArea(ALL_VALUE)
-  }, [selectedGrade])
+  }, [])
 
-  useEffect(() => {
+  const handleSubjectChange = useCallback((value: string) => {
+    setSelectedSubject(value)
     setSelectedArea(ALL_VALUE)
-  }, [selectedSubject])
+  }, [])
 
+  // Reset pagination whenever active filters change
+  useEffect(() => {
+    setDisplayCount(PAGE_SIZE)
+  }, [debouncedKeyword, selectedCurriculum, selectedGrade, selectedSubject, selectedArea])
+
+  // ── Filtered results ──────────────────────────────────────────────────────
   const filteredData = useMemo(() => {
     return allData.filter((d) => {
       if (selectedCurriculum !== ALL_VALUE && d.교육과정 !== selectedCurriculum) return false
@@ -125,11 +188,14 @@ export default function HomePage() {
     })
   }, [allData, selectedCurriculum, selectedGrade, selectedSubject, selectedArea, debouncedKeyword])
 
+  const displayedData = useMemo(() => filteredData.slice(0, displayCount), [filteredData, displayCount])
+
+  // ── Actions ───────────────────────────────────────────────────────────────
   const handleCopy = useCallback(async (item: AchievementStandard) => {
     const text = `${item.코드} ${item.내용}`
     try {
       await navigator.clipboard.writeText(text)
-      toast({ title: "복사 완료", description: `${item.코드}`, duration: 1500 })
+      toast({ title: "복사 완료", description: item.코드, duration: 1500 })
     } catch {
       toast({ title: "복사 실패", variant: "destructive", duration: 1500 })
     }
@@ -147,57 +213,87 @@ export default function HomePage() {
 
   const handleMoveUp = useCallback((index: number) => {
     if (index === 0) return
-    const newItems = [...basketItems]
-    ;[newItems[index - 1], newItems[index]] = [newItems[index], newItems[index - 1]]
-    reorderItems(newItems)
+    const n = [...basketItems]
+    ;[n[index - 1], n[index]] = [n[index], n[index - 1]]
+    reorderItems(n)
   }, [basketItems, reorderItems])
 
   const handleMoveDown = useCallback((index: number) => {
     if (index === basketItems.length - 1) return
-    const newItems = [...basketItems]
-    ;[newItems[index], newItems[index + 1]] = [newItems[index + 1], newItems[index]]
-    reorderItems(newItems)
+    const n = [...basketItems]
+    ;[n[index], n[index + 1]] = [n[index + 1], n[index]]
+    reorderItems(n)
   }, [basketItems, reorderItems])
 
-  const hasActiveFilter = selectedCurriculum !== ALL_VALUE || selectedGrade !== ALL_VALUE || selectedSubject !== ALL_VALUE || selectedArea !== ALL_VALUE || keyword
-
-  const resetFilters = () => {
+  const resetFilters = useCallback(() => {
     setSelectedCurriculum(ALL_VALUE)
     setSelectedGrade(ALL_VALUE)
     setSelectedSubject(ALL_VALUE)
     setSelectedArea(ALL_VALUE)
     setKeyword("")
-  }
+  }, [])
 
+  const hasActiveFilter =
+    selectedCurriculum !== ALL_VALUE ||
+    selectedGrade !== ALL_VALUE ||
+    selectedSubject !== ALL_VALUE ||
+    selectedArea !== ALL_VALUE ||
+    !!keyword
+
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="flex min-h-[calc(100vh-56px)]">
-      {/* Main content */}
-      <div className="flex-1 min-w-0 flex flex-col">
-        {/* Search bar area */}
-        <div className="bg-card border-b border-border/60 px-4 py-3 space-y-2.5">
-          {/* Keyword search */}
-          <div className="relative">
-            <span className="material-icons-outlined absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-[20px]">search</span>
-            <Input
-              placeholder="키워드 검색 (성취기준 코드, 내용, 과목, 영역...)"
-              value={keyword}
-              onChange={(e) => setKeyword(e.target.value)}
-              className="pl-10 pr-9 h-10 bg-muted/50 border-border/60 focus-visible:bg-background rounded-lg"
-              data-testid="keyword-search"
-            />
-            {keyword && (
-              <button
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                onClick={() => setKeyword("")}
-              >
-                <span className="material-icons-outlined text-[18px]">close</span>
-              </button>
-            )}
+      {/* ── Left: main content ─────────────────────────────────────────── */}
+      <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+
+        {/* Search + filter bar */}
+        <div className="bg-card border-b border-border/60 px-4 py-3 space-y-2.5 shrink-0">
+          {/* Top row: keyword + sidebar toggle */}
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <span className="material-icons-outlined absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-[20px]">search</span>
+              <Input
+                placeholder="키워드 검색 (코드, 내용, 과목, 영역...)"
+                value={keyword}
+                onChange={(e) => setKeyword(e.target.value)}
+                className="pl-10 pr-9 h-10 bg-muted/50 border-border/60 focus-visible:bg-background rounded-lg"
+                data-testid="keyword-search"
+              />
+              {keyword && (
+                <button
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  onClick={() => setKeyword("")}
+                >
+                  <span className="material-icons-outlined text-[18px]">close</span>
+                </button>
+              )}
+            </div>
+
+            {/* Desktop sidebar toggle button */}
+            <button
+              onClick={() => setSidebarVisible((v) => !v)}
+              title={sidebarVisible ? "바구니 닫기" : "바구니 열기"}
+              className={`hidden lg:flex items-center gap-1.5 shrink-0 rounded-lg px-2.5 py-2 text-xs font-medium transition-all border ${
+                sidebarVisible
+                  ? "bg-muted text-muted-foreground border-border/60 hover:text-foreground"
+                  : "bg-primary/10 text-primary border-primary/20 hover:bg-primary/20"
+              }`}
+            >
+              <span className="material-icons-outlined text-[18px]">shopping_basket</span>
+              {basketItems.length > 0 && (
+                <span className="inline-flex items-center justify-center h-4 min-w-[1rem] px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold">
+                  {basketItems.length}
+                </span>
+              )}
+              <span className="material-icons-outlined text-[15px]">
+                {sidebarVisible ? "chevron_right" : "chevron_left"}
+              </span>
+            </button>
           </div>
 
-          {/* Filters */}
+          {/* Filter dropdowns */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <Select value={selectedCurriculum} onValueChange={setSelectedCurriculum}>
+            <Select value={selectedCurriculum} onValueChange={handleCurriculumChange}>
               <SelectTrigger className="h-8 text-xs" data-testid="filter-curriculum">
                 <SelectValue placeholder="교육과정" />
               </SelectTrigger>
@@ -209,7 +305,7 @@ export default function HomePage() {
               </SelectContent>
             </Select>
 
-            <Select value={selectedGrade} onValueChange={setSelectedGrade} disabled={gradeOptions.length === 0}>
+            <Select value={selectedGrade} onValueChange={handleGradeChange} disabled={gradeOptions.length === 0}>
               <SelectTrigger className="h-8 text-xs" data-testid="filter-grade">
                 <SelectValue placeholder="학년군" />
               </SelectTrigger>
@@ -221,7 +317,7 @@ export default function HomePage() {
               </SelectContent>
             </Select>
 
-            <Select value={selectedSubject} onValueChange={setSelectedSubject} disabled={subjectOptions.length === 0}>
+            <Select value={selectedSubject} onValueChange={handleSubjectChange} disabled={subjectOptions.length === 0}>
               <SelectTrigger className="h-8 text-xs" data-testid="filter-subject">
                 <SelectValue placeholder="과목" />
               </SelectTrigger>
@@ -250,49 +346,19 @@ export default function HomePage() {
           {hasActiveFilter && (
             <div className="flex items-center gap-1.5 flex-wrap">
               {selectedCurriculum !== ALL_VALUE && (
-                <button
-                  onClick={() => setSelectedCurriculum(ALL_VALUE)}
-                  className="inline-flex items-center gap-1 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full hover:bg-primary/20 transition-colors"
-                >
-                  {selectedCurriculum}
-                  <span className="material-icons-outlined text-[12px]">close</span>
-                </button>
+                <FilterChip label={selectedCurriculum} onRemove={() => handleCurriculumChange(ALL_VALUE)} />
               )}
               {selectedGrade !== ALL_VALUE && (
-                <button
-                  onClick={() => setSelectedGrade(ALL_VALUE)}
-                  className="inline-flex items-center gap-1 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full hover:bg-primary/20 transition-colors"
-                >
-                  {selectedGrade}
-                  <span className="material-icons-outlined text-[12px]">close</span>
-                </button>
+                <FilterChip label={selectedGrade} onRemove={() => handleGradeChange(ALL_VALUE)} />
               )}
               {selectedSubject !== ALL_VALUE && (
-                <button
-                  onClick={() => setSelectedSubject(ALL_VALUE)}
-                  className="inline-flex items-center gap-1 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full hover:bg-primary/20 transition-colors"
-                >
-                  {selectedSubject}
-                  <span className="material-icons-outlined text-[12px]">close</span>
-                </button>
+                <FilterChip label={selectedSubject} onRemove={() => handleSubjectChange(ALL_VALUE)} />
               )}
               {selectedArea !== ALL_VALUE && (
-                <button
-                  onClick={() => setSelectedArea(ALL_VALUE)}
-                  className="inline-flex items-center gap-1 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full hover:bg-primary/20 transition-colors"
-                >
-                  {selectedArea}
-                  <span className="material-icons-outlined text-[12px]">close</span>
-                </button>
+                <FilterChip label={selectedArea} onRemove={() => setSelectedArea(ALL_VALUE)} />
               )}
               {keyword && (
-                <button
-                  onClick={() => setKeyword("")}
-                  className="inline-flex items-center gap-1 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full hover:bg-primary/20 transition-colors"
-                >
-                  "{keyword}"
-                  <span className="material-icons-outlined text-[12px]">close</span>
-                </button>
+                <FilterChip label={`"${keyword}"`} onRemove={() => setKeyword("")} />
               )}
               <button
                 onClick={resetFilters}
@@ -305,127 +371,163 @@ export default function HomePage() {
           )}
         </div>
 
-        {/* Results */}
-        <div className="flex-1 overflow-auto p-4">
-          {/* Result count */}
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-xs text-muted-foreground">
-              {isLoading
-                ? "데이터 불러오는 중..."
-                : isError
-                ? "데이터를 불러오지 못했습니다."
-                : `총 ${filteredData.length.toLocaleString()}개 성취기준`}
-            </p>
-          </div>
+        {/* Scrollable content area */}
+        <div className="flex-1 overflow-auto">
+          {/* Hero — shown only when no filters active */}
+          {!hasActiveFilter && !isLoading && (
+            <HeroSection totalCount={allData.length} isLoading={isLoading} />
+          )}
 
-          {isLoading ? (
-            <div className="flex flex-col items-center justify-center py-24 text-muted-foreground gap-3">
-              <div className="relative">
-                <span className="material-icons-outlined text-5xl text-primary/30">auto_stories</span>
-                <span className="material-icons-outlined text-2xl text-primary animate-spin absolute -bottom-1 -right-1">refresh</span>
+          <div className="p-4">
+            {/* Result count */}
+            {(hasActiveFilter || isLoading) && (
+              <p className="text-xs text-muted-foreground mb-3">
+                {isLoading
+                  ? "데이터 불러오는 중..."
+                  : isError
+                  ? "데이터를 불러오지 못했습니다."
+                  : `총 ${filteredData.length.toLocaleString()}개 성취기준`}
+              </p>
+            )}
+
+            {/* States */}
+            {isLoading ? (
+              <div className="flex flex-col items-center justify-center py-24 text-muted-foreground gap-3">
+                <div className="relative">
+                  <span className="material-icons-outlined text-5xl text-primary/30">auto_stories</span>
+                  <span className="material-icons-outlined text-2xl text-primary animate-spin absolute -bottom-1 -right-1">refresh</span>
+                </div>
+                <p className="text-sm font-medium">교육과정 데이터를 불러오는 중입니다...</p>
+                <p className="text-xs opacity-70">약 1MB 데이터 로드 중, 잠시 기다려 주세요.</p>
               </div>
-              <p className="text-sm font-medium">교육과정 데이터를 불러오는 중입니다...</p>
-              <p className="text-xs">데이터 크기가 크므로 잠시 기다려 주세요.</p>
-            </div>
-          ) : isError ? (
-            <div className="flex flex-col items-center justify-center py-24 text-muted-foreground gap-2">
-              <span className="material-icons-outlined text-5xl text-destructive/40">error_outline</span>
-              <p className="text-sm font-medium">데이터를 불러오지 못했습니다.</p>
-              <p className="text-xs">네트워크 상태를 확인해 주세요.</p>
-            </div>
-          ) : filteredData.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-24 text-muted-foreground gap-2">
-              <span className="material-icons-outlined text-5xl opacity-30">search_off</span>
-              <p className="text-sm font-medium">검색 결과가 없습니다.</p>
-              <p className="text-xs">다른 키워드나 필터를 시도해 보세요.</p>
-              {hasActiveFilter && (
-                <button
-                  onClick={resetFilters}
-                  className="mt-2 text-xs text-primary hover:underline"
-                >
+            ) : isError ? (
+              <div className="flex flex-col items-center justify-center py-24 text-muted-foreground gap-2">
+                <span className="material-icons-outlined text-5xl text-destructive/40">error_outline</span>
+                <p className="text-sm font-medium">데이터를 불러오지 못했습니다.</p>
+              </div>
+            ) : !hasActiveFilter ? (
+              /* No filter = show prompt */
+              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-3">
+                <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center">
+                  <span className="material-icons-outlined text-primary text-3xl">manage_search</span>
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-medium text-foreground">위 필터나 키워드로 검색해 보세요</p>
+                  <p className="text-xs opacity-70 mt-1">교육과정, 학년군, 과목, 영역별로 찾을 수 있습니다</p>
+                </div>
+              </div>
+            ) : filteredData.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-2">
+                <span className="material-icons-outlined text-5xl opacity-30">search_off</span>
+                <p className="text-sm font-medium">검색 결과가 없습니다.</p>
+                <button onClick={resetFilters} className="mt-1 text-xs text-primary hover:underline">
                   필터 초기화하기
                 </button>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {filteredData.map((item) => {
-                const inBasket = isInBasket(item.코드)
-                return (
-                  <div
-                    key={item.코드}
-                    className="group bg-card border border-border/60 rounded-xl p-3.5 hover:border-primary/30 hover:shadow-sm transition-all"
-                    data-testid="achievement-item"
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="flex-1 min-w-0">
-                        {/* Meta row */}
-                        <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
-                          <span className="font-mono text-xs font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded-md">
-                            {item.코드}
-                          </span>
-                          <span className="text-[11px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded-md">{item.교육과정}</span>
-                          <span className="text-[11px] text-muted-foreground">{item.학년군}</span>
-                          <span className="text-[11px] text-muted-foreground">·</span>
-                          <span className="text-[11px] text-muted-foreground">{item.과목}</span>
-                          {item.영역 && (
-                            <>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  {displayedData.map((item) => {
+                    const inBasket = isInBasket(item.코드)
+                    return (
+                      <div
+                        key={item.코드}
+                        className="group bg-card border border-border/60 rounded-xl p-3.5 hover:border-primary/30 hover:shadow-sm transition-all"
+                        data-testid="achievement-item"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
+                              <span className="font-mono text-xs font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded-md">
+                                {item.코드}
+                              </span>
+                              <span className="text-[11px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded-md">{item.교육과정}</span>
+                              <span className="text-[11px] text-muted-foreground">{item.학년군}</span>
                               <span className="text-[11px] text-muted-foreground">·</span>
-                              <span className="text-[11px] text-muted-foreground">{item.영역}</span>
-                            </>
-                          )}
-                        </div>
-                        {/* Content */}
-                        <p className="text-sm leading-relaxed text-foreground/90">{item.내용}</p>
-                      </div>
+                              <span className="text-[11px] text-muted-foreground">{item.과목}</span>
+                              {item.영역 && (
+                                <>
+                                  <span className="text-[11px] text-muted-foreground">·</span>
+                                  <span className="text-[11px] text-muted-foreground">{item.영역}</span>
+                                </>
+                              )}
+                            </div>
+                            <p className="text-sm leading-relaxed text-foreground/90">{item.내용}</p>
+                          </div>
 
-                      {/* Actions */}
-                      <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          title="코드+내용 복사"
-                          onClick={() => handleCopy(item)}
-                          className="flex items-center justify-center w-7 h-7 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                          data-testid="btn-copy"
-                        >
-                          <span className="material-icons-outlined text-[16px]">content_copy</span>
-                        </button>
-                        <button
-                          title={inBasket ? "바구니에 담긴 항목" : "바구니에 추가"}
-                          disabled={inBasket}
-                          onClick={() => handleAddToBasket(item)}
-                          className={`flex items-center justify-center w-7 h-7 rounded-lg transition-colors ${
-                            inBasket
-                              ? "text-primary bg-primary/10 cursor-default"
-                              : "text-muted-foreground hover:text-primary hover:bg-primary/10"
-                          }`}
-                          data-testid="btn-add-basket"
-                        >
-                          <span className="material-icons-outlined text-[16px]">
-                            {inBasket ? "shopping_basket" : "add_shopping_cart"}
-                          </span>
-                        </button>
+                          <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              title="코드+내용 복사"
+                              onClick={() => handleCopy(item)}
+                              className="flex items-center justify-center w-7 h-7 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                              data-testid="btn-copy"
+                            >
+                              <span className="material-icons-outlined text-[16px]">content_copy</span>
+                            </button>
+                            <button
+                              title={inBasket ? "바구니에 담긴 항목" : "바구니에 추가"}
+                              disabled={inBasket}
+                              onClick={() => handleAddToBasket(item)}
+                              className={`flex items-center justify-center w-7 h-7 rounded-lg transition-colors ${
+                                inBasket
+                                  ? "text-primary bg-primary/10 cursor-default"
+                                  : "text-muted-foreground hover:text-primary hover:bg-primary/10"
+                              }`}
+                              data-testid="btn-add-basket"
+                            >
+                              <span className="material-icons-outlined text-[16px]">
+                                {inBasket ? "shopping_basket" : "add_shopping_cart"}
+                              </span>
+                            </button>
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                    )
+                  })}
+                </div>
+
+                {/* Pagination */}
+                {displayCount < filteredData.length && (
+                  <div className="mt-4 flex flex-col items-center gap-1.5">
+                    <p className="text-xs text-muted-foreground">
+                      {displayCount.toLocaleString()} / {filteredData.length.toLocaleString()}개 표시 중
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setDisplayCount((c) => c + PAGE_SIZE)}
+                      className="gap-1.5"
+                    >
+                      <span className="material-icons-outlined text-[16px]">expand_more</span>
+                      {PAGE_SIZE}개 더 보기
+                    </Button>
                   </div>
-                )
-              })}
-            </div>
-          )}
+                )}
+              </>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Basket sidebar - desktop */}
-      <aside className="hidden lg:flex flex-col w-72 border-l border-border/60 bg-card">
-        <BasketSidebar
-          items={basketItems}
-          onRemove={handleRemoveFromBasket}
-          onMoveUp={handleMoveUp}
-          onMoveDown={handleMoveDown}
-          onClear={() => setShowClearDialog(true)}
-        />
+      {/* ── Right: basket sidebar (desktop) ────────────────────────────── */}
+      <aside
+        className={`hidden lg:flex flex-col border-l border-border/60 bg-card overflow-hidden transition-all duration-200 ${
+          sidebarVisible ? "w-72" : "w-0 border-l-0"
+        }`}
+      >
+        {sidebarVisible && (
+          <BasketSidebar
+            items={basketItems}
+            onRemove={handleRemoveFromBasket}
+            onMoveUp={handleMoveUp}
+            onMoveDown={handleMoveDown}
+            onClear={() => setShowClearDialog(true)}
+            onClose={() => setSidebarVisible(false)}
+          />
+        )}
       </aside>
 
-      {/* Basket FAB - mobile */}
+      {/* ── Basket FAB (mobile) ─────────────────────────────────────────── */}
       <div className="lg:hidden fixed bottom-5 right-5 z-30">
         <button
           onClick={() => setBasketOpen(true)}
@@ -440,9 +542,9 @@ export default function HomePage() {
         </button>
       </div>
 
-      {/* Basket dialog - mobile */}
+      {/* ── Basket dialog (mobile) ──────────────────────────────────────── */}
       <Dialog open={basketOpen} onOpenChange={setBasketOpen}>
-        <DialogContent className="max-h-[85vh] overflow-hidden flex flex-col p-0">
+        <DialogContent className="max-h-[85vh] overflow-hidden flex flex-col p-0 gap-0">
           <DialogHeader className="px-4 pt-4 pb-0">
             <DialogTitle className="flex items-center gap-2 text-base">
               <span className="material-icons-outlined text-primary text-[20px]">shopping_basket</span>
@@ -455,14 +557,14 @@ export default function HomePage() {
               onRemove={handleRemoveFromBasket}
               onMoveUp={handleMoveUp}
               onMoveDown={handleMoveDown}
-              onClear={() => setShowClearDialog(true)}
+              onClear={() => { setShowClearDialog(true); setBasketOpen(false) }}
               compact
             />
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Clear basket confirmation */}
+      {/* ── Clear basket confirmation ───────────────────────────────────── */}
       <Dialog open={showClearDialog} onOpenChange={setShowClearDialog}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -493,20 +595,35 @@ export default function HomePage() {
   )
 }
 
+// ─── Filter Chip ─────────────────────────────────────────────────────────────
+function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }) {
+  return (
+    <button
+      onClick={onRemove}
+      className="inline-flex items-center gap-1 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full hover:bg-primary/20 transition-colors font-medium"
+    >
+      {label}
+      <span className="material-icons-outlined text-[11px]">close</span>
+    </button>
+  )
+}
+
+// ─── Basket Sidebar ──────────────────────────────────────────────────────────
 interface BasketSidebarProps {
   items: BasketItem[]
   onRemove: (code: string) => void
   onMoveUp: (index: number) => void
   onMoveDown: (index: number) => void
   onClear: () => void
+  onClose?: () => void
   compact?: boolean
 }
 
-function BasketSidebar({ items, onRemove, onMoveUp, onMoveDown, onClear, compact }: BasketSidebarProps) {
+function BasketSidebar({ items, onRemove, onMoveUp, onMoveDown, onClear, onClose, compact }: BasketSidebarProps) {
   return (
     <div className={compact ? "" : "flex flex-col h-full"}>
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border/60">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border/60 shrink-0">
         <div className="flex items-center gap-2">
           <span className="material-icons-outlined text-primary text-[18px]">shopping_basket</span>
           <span className="font-semibold text-sm">수업 바구니</span>
@@ -516,15 +633,26 @@ function BasketSidebar({ items, onRemove, onMoveUp, onMoveDown, onClear, compact
             </span>
           )}
         </div>
-        {items.length > 0 && (
-          <button
-            onClick={onClear}
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors"
-          >
-            <span className="material-icons-outlined text-[14px]">delete_sweep</span>
-            비우기
-          </button>
-        )}
+        <div className="flex items-center gap-1">
+          {items.length > 0 && (
+            <button
+              onClick={onClear}
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors px-1.5 py-1 rounded"
+            >
+              <span className="material-icons-outlined text-[14px]">delete_sweep</span>
+              비우기
+            </button>
+          )}
+          {onClose && (
+            <button
+              onClick={onClose}
+              title="바구니 닫기"
+              className="flex items-center justify-center w-7 h-7 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            >
+              <span className="material-icons-outlined text-[18px]">chevron_right</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Items */}
@@ -542,7 +670,6 @@ function BasketSidebar({ items, onRemove, onMoveUp, onMoveDown, onClear, compact
               className="group relative bg-background border border-border/60 rounded-lg p-2.5 hover:border-primary/30 transition-colors text-xs"
             >
               <div className="flex items-start gap-1.5">
-                {/* Reorder buttons */}
                 <div className="flex flex-col gap-0.5 shrink-0 mt-0.5">
                   <button
                     className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-muted rounded text-muted-foreground hover:text-foreground disabled:opacity-20 transition-all"
@@ -559,16 +686,10 @@ function BasketSidebar({ items, onRemove, onMoveUp, onMoveDown, onClear, compact
                     <span className="material-icons-outlined text-[13px]">keyboard_arrow_down</span>
                   </button>
                 </div>
-
-                {/* Content */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1 mb-0.5">
-                    <span className="font-mono font-bold text-primary text-[11px]">{item.코드}</span>
-                  </div>
-                  <p className="text-muted-foreground leading-snug line-clamp-2">{item.내용}</p>
+                  <span className="font-mono font-bold text-primary text-[11px] bg-primary/10 px-1 rounded">{item.코드}</span>
+                  <p className="text-muted-foreground leading-snug line-clamp-2 mt-0.5">{item.내용}</p>
                 </div>
-
-                {/* Remove */}
                 <button
                   className="opacity-0 group-hover:opacity-100 shrink-0 p-0.5 hover:bg-destructive/10 hover:text-destructive rounded transition-all"
                   onClick={() => onRemove(item.코드)}
@@ -583,7 +704,7 @@ function BasketSidebar({ items, onRemove, onMoveUp, onMoveDown, onClear, compact
 
       {/* Footer CTA */}
       {items.length > 0 && (
-        <div className="p-3 border-t border-border/60">
+        <div className="p-3 border-t border-border/60 shrink-0">
           <Link
             href="/design"
             className="flex items-center justify-center gap-2 w-full rounded-lg bg-primary text-primary-foreground px-3 py-2.5 text-sm font-semibold hover:bg-primary/90 transition-colors shadow-sm"
