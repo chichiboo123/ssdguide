@@ -33,6 +33,7 @@
     "wouter": "^3.9.0"
   },
   "devDependencies": {
+    "@netlify/functions": "^3.0.3",
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.3",
     "tsx": "^4.19.3",

@@ -1,0 +1,20 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+  functions = "netlify/functions"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# Rewrite /api/groq/* → Netlify function (no frontend code changes needed)
+[[redirects]]
+  from = "/api/groq/*"
+  to = "/.netlify/functions/groq"
+  status = 200
+  force = true
+
+# SPA fallback — must be last
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
