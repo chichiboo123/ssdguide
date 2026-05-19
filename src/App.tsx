@@ -1,3 +1,4 @@
+import { Component, type ReactNode } from "react"
 import { Route, Switch, Router } from "wouter"
 import { useHashLocation } from "wouter/use-hash-location"
 import { QueryClientProvider } from "@tanstack/react-query"
@@ -7,6 +8,34 @@ import { Toaster } from "@/components/ui/toaster"
 import { useBasket } from "@/hooks/use-basket"
 import HomePage from "@/pages/home"
 import LessonDesignPage from "@/pages/lesson-design"
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  constructor(props: { children: ReactNode }) {
+    super(props)
+    this.state = { error: null }
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { error }
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="flex flex-col items-center justify-center min-h-screen gap-4 p-8 text-center">
+          <span className="material-icons-outlined text-destructive text-[48px]">error_outline</span>
+          <h1 className="text-xl font-semibold">페이지를 불러오는 중 오류가 발생했습니다</h1>
+          <p className="text-sm text-muted-foreground max-w-md">{this.state.error.message}</p>
+          <button
+            className="mt-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-medium"
+            onClick={() => window.location.reload()}
+          >
+            새로고침
+          </button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 
 function AppContent() {
   const { items } = useBasket()
@@ -43,10 +72,12 @@ function AppContent() {
 
 export default function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <Router hook={useHashLocation}>
-        <AppContent />
-      </Router>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <Router hook={useHashLocation}>
+          <AppContent />
+        </Router>
+      </QueryClientProvider>
+    </ErrorBoundary>
   )
 }
