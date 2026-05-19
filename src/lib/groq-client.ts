@@ -1,6 +1,3 @@
-// Base URL: Vite dev proxy rewrites /api → localhost:3001.
-// In Docker, nginx rewrites /api → backend container.
-// For external deployments, set VITE_API_BASE_URL to the backend origin.
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? ''
 
 export interface StandardItem {
@@ -12,13 +9,16 @@ export interface StandardItem {
   영역?: string
 }
 
-export type RequestType = 'suggest_objective' | 'suggest_process'
+export type RequestType = 'suggest_objective' | 'suggest_process' | 'suggest_evaluation'
 
 export interface LessonAIRequest {
   standards: StandardItem[]
   intent: string
   requestType: RequestType
+  /** Current objective — passed as context for process/evaluation generation */
   objective?: string
+  /** Current process — passed as context for evaluation generation */
+  process?: string
 }
 
 export interface LessonAIResponse {

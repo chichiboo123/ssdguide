@@ -13,7 +13,8 @@ import { AchievementFilterPanel } from "@/components/achievement-filter-panel"
 import { useBasket } from "@/hooks/use-basket"
 import { useToast } from "@/hooks/use-toast"
 import { useLessonAI } from "@/hooks/use-lesson-ai"
-import { formatStandard } from "@/lib/utils"
+import { suggestLessonContent } from "@/lib/groq-client"
+import { formatStandard, cn } from "@/lib/utils"
 import type {
   LessonDesign,
   LessonProcessStep,
@@ -152,6 +153,10 @@ export default function LessonDesignPage() {
   const { items: basketItems, addItem } = useBasket()
   const { toast } = useToast()
   const { suggest, isLoading: aiLoading, error: aiError, suggestion: aiSuggestion, clearSuggestion } = useLessonAI()
+
+  const [isGeneratingAll, setIsGeneratingAll] = useState(false)
+  const [generatingStep, setGeneratingStep] = useState("")
+  const [aiEvalParsed, setAiEvalParsed] = useState<Array<{ domain: string; element: string; methods: string[] }> | null>(null)
 
   const [title, setTitle] = useState("")
   const [author, setAuthor] = useState("")
@@ -317,22 +322,27 @@ export default function LessonDesignPage() {
     reader.readAsDataURL(file)
   }, [])
 
+  const anyAiLoading = aiLoading || isGeneratingAll
+
   // ── AI suggestion handlers ───────────────────────────────────────────────
   const handleSuggestObjective = useCallback(async () => {
-    if (standards.length === 0) {
-      toast({ title: "성취기준을 먼저 추가해주세요.", duration: 2000 })
-      return
-    }
-    await suggest({ standards, intent, requestType: "suggest_objective" }, "objective")
-  }, [standards, intent, suggest, toast])
+    if (standards.length === 0) { toast({ title: "성취기준을 먼저 추가해주세요.", duration: 2000 }); return }
+    await suggest({ standards, intent, process, requestType: "suggest_objective" }, "objective")
+  }, [standards, intent, process, suggest, toast])
 
   const handleSuggestProcess = useCallback(async () => {
-    if (standards.length === 0) {
-      toast({ title: "성취기준을 먼저 추가해주세요.", duration: 2000 })
-      return
+    if (standards.length === 0) { toast({ title: "성취기준을 먼저 추가해주세요.", duration: 2000 }); return }
+    await suggest({ standards, intent, objective, process, requestType: "suggest_process" }, "process")
+  }, [standards, intent, objective, process, suggest, toast])
+
+  const handleSuggestEvaluation = useCallback(async () => {
+    if (standards.length === 0) { toast({ title: "성취기준을 먼저 추가해주세요.", duration: 2000 }); return }
+    const text = await suggest({ standards, intent, objective, process, requestType: "suggest_evaluation" }, "evaluation")
+    if (text) {
+      const parsed = parseEvalSuggestions(text)
+      if (parsed) setAiEvalParsed(parsed)
     }
-    await suggest({ standards, intent, objective, requestType: "suggest_process" }, "process")
-  }, [standards, intent, objective, suggest, toast])
+  }, [standards, intent, objective, process, suggest, toast])
 
   const applyAiSuggestion = useCallback(() => {
     if (!aiSuggestion) return
@@ -340,6 +350,51 @@ export default function LessonDesignPage() {
     if (aiSuggestion.section === "process") setProcess(aiSuggestion.text)
     clearSuggestion()
   }, [aiSuggestion, clearSuggestion])
+
+  const applyAiEvalSuggestions = useCallback(() => {
+    if (!aiEvalParsed) return
+    setEvaluations(aiEvalParsed.map((e) => ({ id: genId(), standards: [], domain: e.domain, element: e.element, methods: e.methods })))
+    setAiEvalParsed(null)
+    clearSuggestion()
+  }, [aiEvalParsed, clearSuggestion])
+
+  // ── Generate all (sequential: objective → process → evaluation) ──────────
+  const handleGenerateAll = useCallback(async () => {
+    if (standards.length === 0) { toast({ title: "성취기준을 먼저 추가해주세요.", duration: 2000 }); return }
+    setIsGeneratingAll(true)
+    clearSuggestion()
+    setAiEvalParsed(null)
+    let newObj = objective
+    let newProc = process
+
+    try {
+      setGeneratingStep("수업 목표")
+      try {
+        const r = await suggestLessonContent({ standards, intent, process, requestType: "suggest_objective" })
+        newObj = r.content
+        setObjective(newObj)
+      } catch { toast({ title: "수업 목표 생성 실패", variant: "destructive", duration: 2000 }) }
+
+      setGeneratingStep("수업 과정")
+      try {
+        const r = await suggestLessonContent({ standards, intent, objective: newObj, process, requestType: "suggest_process" })
+        newProc = r.content
+        setProcess(newProc)
+      } catch { toast({ title: "수업 과정 생성 실패", variant: "destructive", duration: 2000 }) }
+
+      setGeneratingStep("평가 계획")
+      try {
+        const r = await suggestLessonContent({ standards, intent, objective: newObj, process: newProc, requestType: "suggest_evaluation" })
+        const parsed = parseEvalSuggestions(r.content)
+        if (parsed) setEvaluations(parsed.map((e) => ({ id: genId(), standards: [], domain: e.domain, element: e.element, methods: e.methods })))
+      } catch { toast({ title: "평가 계획 생성 실패", variant: "destructive", duration: 2000 }) }
+
+      toast({ title: "AI 일괄 생성 완료", duration: 2000 })
+    } finally {
+      setIsGeneratingAll(false)
+      setGeneratingStep("")
+    }
+  }, [standards, intent, objective, process, clearSuggestion, toast])
 
   useEffect(() => {
     if (aiError) toast({ title: aiError, variant: "destructive", duration: 3000 })
@@ -437,6 +492,58 @@ export default function LessonDesignPage() {
     a.click()
     URL.revokeObjectURL(url)
     toast({ title: "TXT 파일 저장 완료", duration: 1500 })
+    setShowExportMenu(false)
+  }
+
+  const handleMdDownload = () => {
+    const lines: string[] = []
+    lines.push(`# ${title || "수업 디자인"}`)
+    if (author) lines.push(`> 수업자: ${author}`)
+    lines.push("")
+    lines.push("## 1. 관련 성취기준")
+    standards.forEach((s) => {
+      const meta = [s.교육과정, s.학년군, s.과목, s.영역].filter(Boolean).join(" / ")
+      lines.push(`- **[${s.코드}]** ${s.내용}  *(${meta})*`)
+    })
+    lines.push("")
+    lines.push("## 2. 수업자 의도")
+    lines.push(intent || "")
+    lines.push("")
+    lines.push("## 3. 수업 목표")
+    lines.push(objective || "")
+    lines.push("")
+    lines.push("## 4. 수업 과정")
+    if (useTableMode) {
+      lines.push("| 차시 | 수업 주제 | 내용 | 비고 |")
+      lines.push("| :---: | --- | --- | --- |")
+      processSteps.forEach((s) => lines.push(`| ${s.period} | ${s.topic} | ${s.content} | ${s.note} |`))
+    } else {
+      lines.push(process || "")
+    }
+    lines.push("")
+    lines.push("## 5. 평가 계획")
+    evaluations.forEach((e, i) => {
+      lines.push(`### 평가 ${i + 1}`)
+      if (e.standards.length) lines.push(`- **성취기준**: ${e.standards.join(", ")}`)
+      if (e.domain) lines.push(`- **평가영역**: ${e.domain}`)
+      if (e.element) lines.push(`- **평가요소**: ${e.element}`)
+      if (e.methods.length) lines.push(`- **평가방법**: ${e.methods.join(", ")}`)
+      lines.push("")
+    })
+    lines.push("## 6. 수업 자료 및 아이디어")
+    materials.forEach((m) => {
+      if (m.type === "text") lines.push(`- ${m.content}`)
+      else if (m.type === "link") lines.push(`- [${m.title || m.url}](${m.url})`)
+      else if (m.type === "image") lines.push(`- 📷 ${m.fileName || "이미지"}`)
+    })
+    const blob = new Blob([lines.join("\n")], { type: "text/markdown;charset=utf-8" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `수업디자인_${title || "제목없음"}.md`
+    a.click()
+    URL.revokeObjectURL(url)
+    toast({ title: "Markdown 파일 저장 완료", duration: 1500 })
     setShowExportMenu(false)
   }
 
@@ -686,13 +793,41 @@ export default function LessonDesignPage() {
           <h2 className="font-semibold">수업자 의도</h2>
         </div>
         <Textarea
+          autoResize
           placeholder="이 수업을 통해 학생들이 무엇을 경험하고 배우기를 바라는지 서술하세요."
           value={intent}
           onChange={(e) => setIntent(e.target.value)}
-          className="min-h-[100px] text-sm resize-y"
+          className="min-h-[100px] text-sm"
           data-testid="lesson-intent"
         />
       </section>
+
+      {/* ── AI 일괄 생성 ── */}
+      {standards.length > 0 && (
+        <section className="border border-violet-200 rounded-xl p-4 bg-gradient-to-r from-violet-50/70 to-indigo-50/70 space-y-2.5">
+          <div className="flex items-start gap-2.5">
+            <span className="material-icons-outlined text-violet-600 text-[22px] mt-0.5">auto_awesome</span>
+            <div>
+              <p className="font-semibold text-sm">AI 일괄 생성</p>
+              <p className="text-xs text-muted-foreground mt-0.5">수업 목표 · 수업 과정 · 평가 계획을 순서대로 한 번에 생성합니다. 성취기준과 수업자 의도를 참고합니다.</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 flex-wrap">
+            <Button
+              size="sm"
+              onClick={handleGenerateAll}
+              disabled={anyAiLoading}
+              className="bg-violet-600 hover:bg-violet-700 text-white gap-1.5 h-8"
+            >
+              <span className={cn("material-icons-outlined text-[16px]", isGeneratingAll && "animate-spin")}>
+                {isGeneratingAll ? "autorenew" : "auto_awesome"}
+              </span>
+              {isGeneratingAll ? `${generatingStep} 생성 중…` : "전체 AI 생성"}
+            </Button>
+            <p className="text-xs text-muted-foreground">각 섹션의 AI 제안 버튼으로 개별 재생성도 가능합니다.</p>
+          </div>
+        </section>
+      )}
 
       {/* Step 4: Objective */}
       <section className="border rounded-xl p-5 space-y-3 bg-card shadow-sm">
@@ -705,20 +840,21 @@ export default function LessonDesignPage() {
             variant="outline"
             size="sm"
             onClick={handleSuggestObjective}
-            disabled={aiLoading}
+            disabled={anyAiLoading}
             className="h-7 text-xs gap-1 border-violet-300 text-violet-700 hover:bg-violet-50"
           >
-            <span className={`material-icons-outlined text-[14px] ${aiLoading && aiSuggestion === null ? "animate-spin" : ""}`}>
-              {aiLoading && aiSuggestion === null ? "autorenew" : "auto_awesome"}
+            <span className={cn("material-icons-outlined text-[14px]", aiLoading && !aiSuggestion && "animate-spin")}>
+              {aiLoading && !aiSuggestion ? "autorenew" : "auto_awesome"}
             </span>
-            {aiLoading && aiSuggestion === null ? "AI 생성 중…" : "AI 제안"}
+            {aiLoading && !aiSuggestion ? "AI 생성 중…" : "AI 재생성"}
           </Button>
         </div>
         <Textarea
+          autoResize
           placeholder="수업이 끝난 후 학생들이 할 수 있게 되는 것을 구체적으로 작성하세요."
           value={objective}
           onChange={(e) => setObjective(e.target.value)}
-          className="min-h-[100px] text-sm resize-y"
+          className="min-h-[100px] text-sm"
           data-testid="lesson-objective"
         />
         {aiSuggestion?.section === "objective" && (
@@ -793,7 +929,8 @@ export default function LessonDesignPage() {
                         <Textarea
                           value={step.content}
                           onChange={(e) => updateStep(step.id, "content", e.target.value)}
-                          className="min-h-[52px] text-xs border-0 bg-transparent p-1 resize-none focus-visible:ring-1"
+                          autoResize
+                          className="min-h-[52px] text-xs border-0 bg-transparent p-1 focus-visible:ring-1"
                         />
                       </td>
                       <td className="border-b border-border/40 p-1">
@@ -835,20 +972,21 @@ export default function LessonDesignPage() {
                 variant="outline"
                 size="sm"
                 onClick={handleSuggestProcess}
-                disabled={aiLoading}
+                disabled={anyAiLoading}
                 className="h-7 text-xs gap-1 border-violet-300 text-violet-700 hover:bg-violet-50"
               >
-                <span className={`material-icons-outlined text-[14px] ${aiLoading ? "animate-spin" : ""}`}>
+                <span className={cn("material-icons-outlined text-[14px]", aiLoading && "animate-spin")}>
                   {aiLoading ? "autorenew" : "auto_awesome"}
                 </span>
-                {aiLoading ? "AI 생성 중…" : "AI 제안"}
+                {aiLoading ? "AI 생성 중…" : "AI 재생성"}
               </Button>
             </div>
             <Textarea
+              autoResize
               placeholder="수업 과정을 자유롭게 서술하세요. (활동 내용, 흐름, 시간 배분 등)"
               value={process}
               onChange={(e) => setProcess(e.target.value)}
-              className="min-h-[160px] text-sm resize-y"
+              className="min-h-[120px] text-sm"
               data-testid="lesson-process"
             />
             {aiSuggestion?.section === "process" && (
@@ -871,11 +1009,34 @@ export default function LessonDesignPage() {
             <h2 className="font-semibold">평가 계획</h2>
             {evaluations.length > 0 && <Badge variant="secondary">{evaluations.length}</Badge>}
           </div>
-          <Button variant="outline" size="sm" onClick={addEval}>
-            <span className="material-icons-outlined text-[16px]">add</span>
-            평가 추가
-          </Button>
+          <div className="flex items-center gap-1.5">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSuggestEvaluation}
+              disabled={anyAiLoading}
+              className="h-7 text-xs gap-1 border-violet-300 text-violet-700 hover:bg-violet-50"
+            >
+              <span className={cn("material-icons-outlined text-[14px]", aiLoading && aiSuggestion?.section === "evaluation" && "animate-spin")}>
+                {aiLoading && aiSuggestion?.section === "evaluation" ? "autorenew" : "auto_awesome"}
+              </span>
+              AI 재생성
+            </Button>
+            <Button variant="outline" size="sm" onClick={addEval}>
+              <span className="material-icons-outlined text-[16px]">add</span>
+              평가 추가
+            </Button>
+          </div>
         </div>
+
+        {/* AI evaluation suggestion panel */}
+        {aiEvalParsed && (
+          <AiEvalSuggestionPanel
+            suggestions={aiEvalParsed}
+            onApply={applyAiEvalSuggestions}
+            onClose={() => { setAiEvalParsed(null); clearSuggestion() }}
+          />
+        )}
 
         <div className="space-y-4">
           {evaluations.map((ev, index) => (
@@ -1045,10 +1206,11 @@ export default function LessonDesignPage() {
 
               {mat.type === "text" && (
                 <Textarea
+                  autoResize
                   placeholder="텍스트 내용을 입력하세요"
                   value={mat.content}
                   onChange={(e) => updateMaterial(mat.id, { content: e.target.value })}
-                  className="min-h-[80px] text-sm resize-y"
+                  className="min-h-[80px] text-sm"
                 />
               )}
               {mat.type === "link" && (
@@ -1203,6 +1365,11 @@ export default function LessonDesignPage() {
                 onClick={handleCopyAll}
               />
               <FabMenuItem
+                icon="description"
+                label="MD 저장"
+                onClick={handleMdDownload}
+              />
+              <FabMenuItem
                 icon="text_snippet"
                 label="TXT 저장"
                 onClick={handleTxtDownload}
@@ -1303,4 +1470,75 @@ function AiSuggestionPanel({
       </Button>
     </div>
   )
+}
+
+// ── AI Evaluation Suggestion Panel ───────────────────────────────────────────
+function AiEvalSuggestionPanel({
+  suggestions,
+  onApply,
+  onClose,
+}: {
+  suggestions: Array<{ domain: string; element: string; methods: string[] }>
+  onApply: () => void
+  onClose: () => void
+}) {
+  return (
+    <div className="border rounded-lg p-3.5 bg-violet-50/60 border-violet-200 space-y-3">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium text-violet-700 flex items-center gap-1">
+          <span className="material-icons-outlined text-[14px]">auto_awesome</span>
+          AI 평가 계획 제안 ({suggestions.length}개)
+        </span>
+        <button onClick={onClose} className="text-xs text-muted-foreground hover:text-foreground">닫기</button>
+      </div>
+      <div className="space-y-2">
+        {suggestions.map((s, i) => (
+          <div key={i} className="bg-background border rounded-lg p-2.5 text-xs space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-semibold text-muted-foreground">평가영역</span>
+              <span className="font-medium">{s.domain}</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="text-[10px] font-semibold text-muted-foreground shrink-0">평가요소</span>
+              <span className="text-foreground/80">{s.element}</span>
+            </div>
+            {s.methods.length > 0 && (
+              <div className="flex items-center gap-1 flex-wrap">
+                <span className="text-[10px] font-semibold text-muted-foreground">평가방법</span>
+                {s.methods.map((m) => (
+                  <span key={m} className="bg-primary/10 text-primary px-1.5 py-0.5 rounded-full text-[10px]">{m}</span>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      <p className="text-[11px] text-muted-foreground">적용하면 현재 평가 계획이 모두 교체됩니다. 성취기준 연결은 직접 선택해주세요.</p>
+      <Button size="sm" onClick={onApply} className="h-7 text-xs gap-1">
+        <span className="material-icons-outlined text-[14px]">check</span>
+        적용하기
+      </Button>
+    </div>
+  )
+}
+
+// ── parseEvalSuggestions ─────────────────────────────────────────────────────
+function parseEvalSuggestions(text: string): Array<{ domain: string; element: string; methods: string[] }> | null {
+  try {
+    const match = text.match(/\[[\s\S]*\]/)
+    if (!match) return null
+    const parsed: unknown = JSON.parse(match[0])
+    if (!Array.isArray(parsed)) return null
+    const valid = (parsed as Array<Record<string, unknown>>).filter(
+      (e) => typeof e.domain === "string" && typeof e.element === "string"
+    )
+    if (valid.length === 0) return null
+    return valid.map((e) => ({
+      domain: e.domain as string,
+      element: e.element as string,
+      methods: Array.isArray(e.methods) ? (e.methods as string[]) : [],
+    }))
+  } catch {
+    return null
+  }
 }

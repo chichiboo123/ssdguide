@@ -318,8 +318,8 @@ export default function HomePage() {
         <div className="flex-1 px-4 lg:px-6 py-6 overflow-auto">
           {/* Filters */}
           <div className="mb-6 space-y-4">
-            {/* Mobile search (hero bar scrolls away on mobile) */}
-            <div className="relative lg:hidden">
+            {/* Mobile + desktop inline search (hero bar disappears on scroll) */}
+            <div className="relative">
               <span className="material-icons-outlined absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-[18px]">search</span>
               <Input
                 placeholder="키워드 검색"
