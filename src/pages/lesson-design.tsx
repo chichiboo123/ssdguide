@@ -13,8 +13,9 @@ import { AchievementFilterPanel } from "@/components/achievement-filter-panel"
 import { useBasket } from "@/hooks/use-basket"
 import { useToast } from "@/hooks/use-toast"
 import { useLessonAI } from "@/hooks/use-lesson-ai"
-import { suggestLessonContent } from "@/lib/groq-client"
+import { suggestLessonContent, getStoredAiPassword, setStoredAiPassword, clearStoredAiPassword } from "@/lib/groq-client"
 import { formatStandard, cn } from "@/lib/utils"
+import { AiPasswordDialog } from "@/components/ai-password-dialog"
 import type {
   LessonDesign,
   LessonProcessStep,
@@ -184,6 +185,9 @@ export default function LessonDesignPage() {
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  const [pwDialog, setPwDialog] = useState<{ open: boolean; error: string | null }>({ open: false, error: null })
+  const pendingAiRef = useRef<(() => Promise<void>) | null>(null)
+
   // ── Load shared design from URL on first mount ──────────────────────────
   useEffect(() => {
     const shareParam = getShareParam()
@@ -324,25 +328,67 @@ export default function LessonDesignPage() {
 
   const anyAiLoading = aiLoading || isGeneratingAll
 
-  // ── AI suggestion handlers ───────────────────────────────────────────────
-  const handleSuggestObjective = useCallback(async () => {
-    if (standards.length === 0) { toast({ title: "성취기준을 먼저 추가해주세요.", duration: 2000 }); return }
-    await suggest({ standards, intent, process, requestType: "suggest_objective" }, "objective")
-  }, [standards, intent, process, suggest, toast])
-
-  const handleSuggestProcess = useCallback(async () => {
-    if (standards.length === 0) { toast({ title: "성취기준을 먼저 추가해주세요.", duration: 2000 }); return }
-    await suggest({ standards, intent, objective, process, requestType: "suggest_process" }, "process")
-  }, [standards, intent, objective, process, suggest, toast])
-
-  const handleSuggestEvaluation = useCallback(async () => {
-    if (standards.length === 0) { toast({ title: "성취기준을 먼저 추가해주세요.", duration: 2000 }); return }
-    const text = await suggest({ standards, intent, objective, process, requestType: "suggest_evaluation" }, "evaluation")
-    if (text) {
-      const parsed = parseEvalSuggestions(text)
-      if (parsed) setAiEvalParsed(parsed)
+  // ── withAuth helper ──────────────────────────────────────────────────────
+  const withAuth = useCallback((action: () => Promise<void>) => {
+    if (!getStoredAiPassword()) {
+      pendingAiRef.current = action
+      setPwDialog({ open: true, error: null })
+      return
     }
-  }, [standards, intent, objective, process, suggest, toast])
+    action().catch((e: unknown) => {
+      if (e instanceof Error && e.message === 'WRONG_PASSWORD') {
+        pendingAiRef.current = action
+        setPwDialog({ open: true, error: '비밀번호가 틀립니다. 다시 입력하세요.' })
+      }
+    })
+  }, [])
+
+  const handlePwSubmit = useCallback(async (pw: string) => {
+    setStoredAiPassword(pw)
+    setPwDialog({ open: false, error: null })
+    const action = pendingAiRef.current
+    if (action) {
+      pendingAiRef.current = null
+      action().catch((e: unknown) => {
+        if (e instanceof Error && e.message === 'WRONG_PASSWORD') {
+          clearStoredAiPassword()
+          pendingAiRef.current = action
+          setPwDialog({ open: true, error: '비밀번호가 틀립니다. 다시 입력하세요.' })
+        }
+      })
+    }
+  }, [])
+
+  const handlePwCancel = useCallback(() => {
+    pendingAiRef.current = null
+    setPwDialog({ open: false, error: null })
+  }, [])
+
+  // ── AI suggestion handlers ───────────────────────────────────────────────
+  const handleSuggestObjective = useCallback(() => {
+    if (standards.length === 0) { toast({ title: "성취기준을 먼저 추가해주세요.", duration: 2000 }); return }
+    withAuth(async () => {
+      await suggest({ standards, intent, process, requestType: "suggest_objective" }, "objective")
+    })
+  }, [standards, intent, process, suggest, toast, withAuth])
+
+  const handleSuggestProcess = useCallback(() => {
+    if (standards.length === 0) { toast({ title: "성취기준을 먼저 추가해주세요.", duration: 2000 }); return }
+    withAuth(async () => {
+      await suggest({ standards, intent, objective, process, requestType: "suggest_process" }, "process")
+    })
+  }, [standards, intent, objective, process, suggest, toast, withAuth])
+
+  const handleSuggestEvaluation = useCallback(() => {
+    if (standards.length === 0) { toast({ title: "성취기준을 먼저 추가해주세요.", duration: 2000 }); return }
+    withAuth(async () => {
+      const text = await suggest({ standards, intent, objective, process, requestType: "suggest_evaluation" }, "evaluation")
+      if (text) {
+        const parsed = parseEvalSuggestions(text)
+        if (parsed) setAiEvalParsed(parsed)
+      }
+    })
+  }, [standards, intent, objective, process, suggest, toast, withAuth])
 
   const applyAiSuggestion = useCallback(() => {
     if (!aiSuggestion) return
@@ -359,8 +405,7 @@ export default function LessonDesignPage() {
   }, [aiEvalParsed, clearSuggestion])
 
   // ── Generate all (sequential: objective → process → evaluation) ──────────
-  const handleGenerateAll = useCallback(async () => {
-    if (standards.length === 0) { toast({ title: "성취기준을 먼저 추가해주세요.", duration: 2000 }); return }
+  const doGenerateAll = useCallback(async () => {
     setIsGeneratingAll(true)
     clearSuggestion()
     setAiEvalParsed(null)
@@ -373,21 +418,30 @@ export default function LessonDesignPage() {
         const r = await suggestLessonContent({ standards, intent, process, requestType: "suggest_objective" })
         newObj = r.content
         setObjective(newObj)
-      } catch { toast({ title: "수업 목표 생성 실패", variant: "destructive", duration: 2000 }) }
+      } catch (e) {
+        if (e instanceof Error && e.message === 'WRONG_PASSWORD') throw e
+        toast({ title: "수업 목표 생성 실패", variant: "destructive", duration: 2000 })
+      }
 
       setGeneratingStep("수업 과정")
       try {
         const r = await suggestLessonContent({ standards, intent, objective: newObj, process, requestType: "suggest_process" })
         newProc = r.content
         setProcess(newProc)
-      } catch { toast({ title: "수업 과정 생성 실패", variant: "destructive", duration: 2000 }) }
+      } catch (e) {
+        if (e instanceof Error && e.message === 'WRONG_PASSWORD') throw e
+        toast({ title: "수업 과정 생성 실패", variant: "destructive", duration: 2000 })
+      }
 
       setGeneratingStep("평가 계획")
       try {
         const r = await suggestLessonContent({ standards, intent, objective: newObj, process: newProc, requestType: "suggest_evaluation" })
         const parsed = parseEvalSuggestions(r.content)
         if (parsed) setEvaluations(parsed.map((e) => ({ id: genId(), standards: [], domain: e.domain, element: e.element, methods: e.methods })))
-      } catch { toast({ title: "평가 계획 생성 실패", variant: "destructive", duration: 2000 }) }
+      } catch (e) {
+        if (e instanceof Error && e.message === 'WRONG_PASSWORD') throw e
+        toast({ title: "평가 계획 생성 실패", variant: "destructive", duration: 2000 })
+      }
 
       toast({ title: "AI 일괄 생성 완료", duration: 2000 })
     } finally {
@@ -395,6 +449,11 @@ export default function LessonDesignPage() {
       setGeneratingStep("")
     }
   }, [standards, intent, objective, process, clearSuggestion, toast])
+
+  const handleGenerateAll = useCallback(() => {
+    if (standards.length === 0) { toast({ title: "성취기준을 먼저 추가해주세요.", duration: 2000 }); return }
+    withAuth(doGenerateAll)
+  }, [standards, toast, withAuth, doGenerateAll])
 
   useEffect(() => {
     if (aiError) toast({ title: aiError, variant: "destructive", duration: 3000 })
@@ -1405,6 +1464,13 @@ export default function LessonDesignPage() {
           </span>
         </button>
       </div>
+
+      <AiPasswordDialog
+        open={pwDialog.open}
+        error={pwDialog.error}
+        onSubmit={handlePwSubmit}
+        onCancel={handlePwCancel}
+      />
     </div>
   )
 }
