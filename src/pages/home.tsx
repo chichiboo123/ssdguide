@@ -172,10 +172,10 @@ export default function HomePage() {
       if (debouncedKeyword) {
         const kw = debouncedKeyword.toLowerCase()
         return (
-          d.내용.toLowerCase().includes(kw) ||
-          d.코드.toLowerCase().includes(kw) ||
-          d.과목.toLowerCase().includes(kw) ||
-          d.영역.toLowerCase().includes(kw)
+          (d.내용 ?? '').toLowerCase().includes(kw) ||
+          (d.코드 ?? '').toLowerCase().includes(kw) ||
+          (d.과목 ?? '').toLowerCase().includes(kw) ||
+          (d.영역 ?? '').toLowerCase().includes(kw)
         )
       }
       return true
