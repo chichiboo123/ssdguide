@@ -12,6 +12,7 @@ import {
 import { AchievementFilterPanel } from "@/components/achievement-filter-panel"
 import { useBasket } from "@/hooks/use-basket"
 import { useToast } from "@/hooks/use-toast"
+import { useLessonAI } from "@/hooks/use-lesson-ai"
 import { formatStandard } from "@/lib/utils"
 import type {
   LessonDesign,
@@ -150,6 +151,7 @@ function buildShareUrl(design: LessonDesign): string {
 export default function LessonDesignPage() {
   const { items: basketItems, addItem } = useBasket()
   const { toast } = useToast()
+  const { suggest, isLoading: aiLoading, error: aiError, suggestion: aiSuggestion, clearSuggestion } = useLessonAI()
 
   const [title, setTitle] = useState("")
   const [author, setAuthor] = useState("")
@@ -314,6 +316,34 @@ export default function LessonDesignPage() {
     }
     reader.readAsDataURL(file)
   }, [])
+
+  // ── AI suggestion handlers ───────────────────────────────────────────────
+  const handleSuggestObjective = useCallback(async () => {
+    if (standards.length === 0) {
+      toast({ title: "성취기준을 먼저 추가해주세요.", duration: 2000 })
+      return
+    }
+    await suggest({ standards, intent, requestType: "suggest_objective" }, "objective")
+  }, [standards, intent, suggest, toast])
+
+  const handleSuggestProcess = useCallback(async () => {
+    if (standards.length === 0) {
+      toast({ title: "성취기준을 먼저 추가해주세요.", duration: 2000 })
+      return
+    }
+    await suggest({ standards, intent, objective, requestType: "suggest_process" }, "process")
+  }, [standards, intent, objective, suggest, toast])
+
+  const applyAiSuggestion = useCallback(() => {
+    if (!aiSuggestion) return
+    if (aiSuggestion.section === "objective") setObjective(aiSuggestion.text)
+    if (aiSuggestion.section === "process") setProcess(aiSuggestion.text)
+    clearSuggestion()
+  }, [aiSuggestion, clearSuggestion])
+
+  useEffect(() => {
+    if (aiError) toast({ title: aiError, variant: "destructive", duration: 3000 })
+  }, [aiError]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Export / Import ──────────────────────────────────────────────────────
   const buildDesign = useCallback((): LessonDesign => ({
@@ -666,9 +696,23 @@ export default function LessonDesignPage() {
 
       {/* Step 4: Objective */}
       <section className="border rounded-xl p-5 space-y-3 bg-card shadow-sm">
-        <div className="flex items-center gap-2">
-          <SectionBadge number={4} />
-          <h2 className="font-semibold">수업 목표</h2>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <SectionBadge number={4} />
+            <h2 className="font-semibold">수업 목표</h2>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSuggestObjective}
+            disabled={aiLoading}
+            className="h-7 text-xs gap-1 border-violet-300 text-violet-700 hover:bg-violet-50"
+          >
+            <span className={`material-icons-outlined text-[14px] ${aiLoading && aiSuggestion === null ? "animate-spin" : ""}`}>
+              {aiLoading && aiSuggestion === null ? "autorenew" : "auto_awesome"}
+            </span>
+            {aiLoading && aiSuggestion === null ? "AI 생성 중…" : "AI 제안"}
+          </Button>
         </div>
         <Textarea
           placeholder="수업이 끝난 후 학생들이 할 수 있게 되는 것을 구체적으로 작성하세요."
@@ -677,6 +721,14 @@ export default function LessonDesignPage() {
           className="min-h-[100px] text-sm resize-y"
           data-testid="lesson-objective"
         />
+        {aiSuggestion?.section === "objective" && (
+          <AiSuggestionPanel
+            suggestion={aiSuggestion.text}
+            model={aiSuggestion.model}
+            onApply={applyAiSuggestion}
+            onClose={clearSuggestion}
+          />
+        )}
       </section>
 
       {/* Step 5: Process */}
@@ -777,13 +829,37 @@ export default function LessonDesignPage() {
             </div>
           </div>
         ) : (
-          <Textarea
-            placeholder="수업 과정을 자유롭게 서술하세요. (활동 내용, 흐름, 시간 배분 등)"
-            value={process}
-            onChange={(e) => setProcess(e.target.value)}
-            className="min-h-[160px] text-sm resize-y"
-            data-testid="lesson-process"
-          />
+          <>
+            <div className="flex justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSuggestProcess}
+                disabled={aiLoading}
+                className="h-7 text-xs gap-1 border-violet-300 text-violet-700 hover:bg-violet-50"
+              >
+                <span className={`material-icons-outlined text-[14px] ${aiLoading ? "animate-spin" : ""}`}>
+                  {aiLoading ? "autorenew" : "auto_awesome"}
+                </span>
+                {aiLoading ? "AI 생성 중…" : "AI 제안"}
+              </Button>
+            </div>
+            <Textarea
+              placeholder="수업 과정을 자유롭게 서술하세요. (활동 내용, 흐름, 시간 배분 등)"
+              value={process}
+              onChange={(e) => setProcess(e.target.value)}
+              className="min-h-[160px] text-sm resize-y"
+              data-testid="lesson-process"
+            />
+            {aiSuggestion?.section === "process" && (
+              <AiSuggestionPanel
+                suggestion={aiSuggestion.text}
+                model={aiSuggestion.model}
+                onApply={applyAiSuggestion}
+                onClose={clearSuggestion}
+              />
+            )}
+          </>
         )}
       </section>
 
@@ -1189,5 +1265,42 @@ function FabMenuItem({
       </span>
       {label}
     </button>
+  )
+}
+
+// ── AI Suggestion Panel ──────────────────────────────────────────────────────
+function AiSuggestionPanel({
+  suggestion,
+  model,
+  onApply,
+  onClose,
+}: {
+  suggestion: string
+  model: string
+  onApply: () => void
+  onClose: () => void
+}) {
+  const shortModel = model.includes("/") ? model.split("/").pop()! : model
+  return (
+    <div className="border rounded-lg p-3.5 bg-violet-50/60 border-violet-200 space-y-3">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium text-violet-700 flex items-center gap-1">
+          <span className="material-icons-outlined text-[14px]">auto_awesome</span>
+          AI 제안
+          <span className="font-mono opacity-70">({shortModel})</span>
+        </span>
+        <button
+          onClick={onClose}
+          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          닫기
+        </button>
+      </div>
+      <p className="text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed">{suggestion}</p>
+      <Button size="sm" onClick={onApply} className="h-7 text-xs gap-1">
+        <span className="material-icons-outlined text-[14px]">check</span>
+        적용하기
+      </Button>
+    </div>
   )
 }

@@ -1,3 +1,11 @@
+# Netlify local cache
+.netlify/
+
+# Environment variable files — NEVER commit these (API keys live here)
+.env
+.env.local
+.env.*.local
+
 # Logs
 logs
 *.log
