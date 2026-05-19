@@ -1,5 +1,10 @@
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? ''
 
+const PW_KEY = 'ssdguide-ai-pw'
+export const getStoredAiPassword = (): string | null => sessionStorage.getItem(PW_KEY)
+export const setStoredAiPassword = (pw: string): void => { sessionStorage.setItem(PW_KEY, pw) }
+export const clearStoredAiPassword = (): void => { sessionStorage.removeItem(PW_KEY) }
+
 export interface StandardItem {
   코드: string
   내용: string
@@ -27,11 +32,20 @@ export interface LessonAIResponse {
 }
 
 export async function suggestLessonContent(req: LessonAIRequest): Promise<LessonAIResponse> {
+  const pw = getStoredAiPassword()
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (pw) headers['x-ai-password'] = pw
+
   const res = await fetch(`${API_BASE}/api/groq/lesson-design`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(req),
   })
+
+  if (res.status === 401) {
+    clearStoredAiPassword()
+    throw new Error('WRONG_PASSWORD')
+  }
 
   const data: { content?: string; model?: string; error?: string } = await res.json()
 

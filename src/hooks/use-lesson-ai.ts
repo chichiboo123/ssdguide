@@ -23,6 +23,7 @@ export function useLessonAI() {
         setSuggestion({ section, text: result.content, model: result.model })
         return result.content
       } catch (err: unknown) {
+        if (err instanceof Error && err.message === 'WRONG_PASSWORD') throw err
         const msg = err instanceof Error ? err.message : 'AI 요청 실패'
         setError(msg)
         return null

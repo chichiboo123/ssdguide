@@ -181,7 +181,7 @@ ${o || '(미작성)'}${trunc(p) ? `\n\n## 수업 과정 (참고)\n${trunc(p)}` :
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Headers': 'Content-Type, x-ai-password',
 }
 
 // ── Handler ───────────────────────────────────────────────────────────────────
@@ -219,6 +219,14 @@ export const handler: Handler = async (event) => {
     }
     if (!requestType) {
       return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'requestType이 필요합니다.' }) }
+    }
+
+    const AI_PASSWORD = process.env.AI_PASSWORD
+    if (AI_PASSWORD) {
+      const reqPassword = event.headers['x-ai-password']
+      if (reqPassword !== AI_PASSWORD) {
+        return { statusCode: 401, headers: CORS, body: JSON.stringify({ error: '비밀번호가 틀립니다.' }) }
+      }
     }
 
     try {

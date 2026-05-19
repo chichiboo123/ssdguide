@@ -189,6 +189,14 @@ router.post('/lesson-design', async (req: Request, res: Response) => {
     res.status(400).json({ error: 'requestType이 필요합니다.' }); return
   }
 
+  const AI_PASSWORD = process.env.AI_PASSWORD
+  if (AI_PASSWORD) {
+    const reqPassword = req.headers['x-ai-password'] as string | undefined
+    if (reqPassword !== AI_PASSWORD) {
+      res.status(401).json({ error: '비밀번호가 틀립니다.' }); return
+    }
+  }
+
   try {
     const messages = buildMessages(body)
     const result = await callWithFallback(messages)

@@ -1,5 +1,7 @@
+import { useState } from "react"
 import { Link, useRoute } from "wouter"
 import { cn } from "@/lib/utils"
+import { HelpDialog } from "@/components/help-dialog"
 
 interface AppHeaderProps {
   basketCount: number
@@ -8,6 +10,7 @@ interface AppHeaderProps {
 export function AppHeader({ basketCount }: AppHeaderProps) {
   const [isHome] = useRoute("/")
   const [isDesign] = useRoute("/design")
+  const [helpOpen, setHelpOpen] = useState(false)
 
   return (
     <header className="sticky top-0 z-40 border-b bg-white/80 backdrop-blur-lg supports-[backdrop-filter]:bg-white/60">
@@ -54,6 +57,14 @@ export function AppHeader({ basketCount }: AppHeaderProps) {
         </nav>
 
         <div className="ml-auto" />
+        <button
+          onClick={() => setHelpOpen(true)}
+          className="flex items-center justify-center w-8 h-8 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          title="사용법"
+        >
+          <span className="material-icons-outlined text-[22px]">help_outline</span>
+        </button>
+        <HelpDialog open={helpOpen} onClose={() => setHelpOpen(false)} />
       </div>
     </header>
   )
