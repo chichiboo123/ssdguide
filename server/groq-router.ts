@@ -51,7 +51,7 @@ async function callWithFallback(messages: ChatMessage[]): Promise<LessonAIRespon
       const completion = await groq.chat.completions.create({
         model,
         messages,
-        max_tokens: 1500,
+        max_tokens: 2500,
         temperature: 0.7,
       })
       const content = completion.choices[0]?.message?.content ?? ''
@@ -118,7 +118,7 @@ ${i}${procCtx ? `\n\n## 현재 작성된 수업 과정 (참고)\n${procCtx}` : '
       { role: 'system', content: SYSTEM },
       {
         role: 'user',
-        content: `아래 정보를 바탕으로 수업 과정(흐름)을 제안해줘.
+        content: `아래 정보를 바탕으로 수업 과정(흐름)을 차시별로 제안해줘.
 
 ## 성취기준
 ${stdText}
@@ -129,11 +129,20 @@ ${i}
 ## 수업 목표
 ${o || '(미작성)'}${procCtx ? `\n\n## 현재 작성된 수업 과정 (참고하되 새롭게 제안하세요)\n${procCtx}` : ''}
 
-**작성 형식:**
-- 도입 → 전개 → 정리 흐름으로 구성
-- 각 단계의 주요 활동과 예상 소요 시간 포함
-- 학생 활동 중심으로 구체적으로 서술
-- **표 형식(마크다운 테이블)은 절대 사용하지 말 것. 텍스트와 글머리 기호만 사용할 것.**`,
+**작성 형식 (반드시 지킬 것):**
+- 단차시 또는 연차시로 구성 (성취기준과 수업 내용에 맞게 결정)
+- 각 차시는 아래 형식으로 작성:
+
+◆ 1차시 (또는 1~2차시 등)
+• 수업 주제: (이 차시의 핵심 주제)
+• 수업 내용:
+  - (도입) 예상 시간 포함, 학생 활동 중심 서술
+  - (전개) 예상 시간 포함, 학생 활동 중심 서술
+  - (정리) 예상 시간 포함, 학생 활동 중심 서술
+• 비고: (특이사항이 있을 경우만 작성 — 없으면 이 항목 생략)
+
+- **표 형식(마크다운 테이블)은 절대 사용하지 말 것**
+- **답변을 중간에 자르지 말고 모든 차시를 완결되게 작성할 것**`,
       },
     ]
   }
