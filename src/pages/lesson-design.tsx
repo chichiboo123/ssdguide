@@ -365,6 +365,13 @@ export default function LessonDesignPage() {
   }, [])
 
   // ── AI suggestion handlers ───────────────────────────────────────────────
+  const handlePolishIntent = useCallback(() => {
+    if (!intent.trim()) { toast({ title: "수업자 의도를 먼저 작성해주세요.", duration: 2000 }); return }
+    withAuth(async () => {
+      await suggest({ intent, requestType: "suggest_intent_edit" }, "intent")
+    })
+  }, [intent, suggest, toast, withAuth])
+
   const handleSuggestObjective = useCallback(() => {
     if (standards.length === 0) { toast({ title: "성취기준을 먼저 추가해주세요.", duration: 2000 }); return }
     withAuth(async () => {
@@ -392,6 +399,7 @@ export default function LessonDesignPage() {
 
   const applyAiSuggestion = useCallback(() => {
     if (!aiSuggestion) return
+    if (aiSuggestion.section === "intent") setIntent(aiSuggestion.text)
     if (aiSuggestion.section === "objective") setObjective(aiSuggestion.text)
     if (aiSuggestion.section === "process") setProcess(aiSuggestion.text)
     clearSuggestion()
@@ -847,9 +855,23 @@ export default function LessonDesignPage() {
 
       {/* Step 3: Intent */}
       <section className="border rounded-xl p-5 space-y-3 bg-card shadow-sm">
-        <div className="flex items-center gap-2">
-          <SectionBadge number={3} />
-          <h2 className="font-semibold">수업자 의도</h2>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <SectionBadge number={3} />
+            <h2 className="font-semibold">수업자 의도</h2>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handlePolishIntent}
+            disabled={anyAiLoading}
+            className="h-7 text-xs gap-1 border-violet-300 text-violet-700 hover:bg-violet-50"
+          >
+            <span className={cn("material-icons-outlined text-[14px]", aiLoading && !aiSuggestion && "animate-spin")}>
+              {aiLoading && !aiSuggestion ? "autorenew" : "auto_fix_high"}
+            </span>
+            {aiLoading && !aiSuggestion ? "AI 첨삭 중…" : "AI 첨삭"}
+          </Button>
         </div>
         <Textarea
           autoResize
@@ -859,6 +881,14 @@ export default function LessonDesignPage() {
           className="min-h-[100px] text-sm"
           data-testid="lesson-intent"
         />
+        {aiSuggestion?.section === "intent" && (
+          <AiSuggestionPanel
+            suggestion={aiSuggestion.text}
+            model={aiSuggestion.model}
+            onApply={applyAiSuggestion}
+            onClose={clearSuggestion}
+          />
+        )}
       </section>
 
       {/* ── AI 일괄 생성 ── */}
