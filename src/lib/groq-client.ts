@@ -31,6 +31,8 @@ export interface LessonAIRequest extends LessonAIOptions {
   standards?: StandardItem[]
   intent: string
   requestType: RequestType
+  /** 평가 추천에서 평가영역을 제한할 교과 목록 */
+  subjects?: string[]
   /** Current objective — passed as context for process/evaluation generation */
   objective?: string
   /** Current process — passed as context for evaluation generation */

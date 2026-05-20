@@ -165,6 +165,63 @@ function buildShareUrl(design: LessonDesign): string {
   return url.toString()
 }
 
+// ─── Local draft persistence ────────────────────────────────────────────────
+const DRAFT_STORAGE_KEY = "ssdguide-lesson-draft-v1"
+
+interface LessonDraft {
+  v: 1
+  title: string
+  author: string
+  standards: BasketItem[]
+  intent: string
+  objective: string
+  process: string
+  useTableMode: boolean
+  processSteps: LessonProcessStep[]
+  evaluations: EvaluationEntry[]
+  materials: MaterialEntry[]
+  aiGrade: string
+  aiLessonScale: string
+  aiTools: string
+  aiOutputForm: string
+}
+
+function loadDraft(): LessonDraft | null {
+  try {
+    const raw = localStorage.getItem(DRAFT_STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (parsed?.v !== 1) return null
+    return parsed as LessonDraft
+  } catch {
+    return null
+  }
+}
+
+function saveDraft(draft: LessonDraft) {
+  const payload = JSON.stringify(draft)
+  try {
+    localStorage.setItem(DRAFT_STORAGE_KEY, payload)
+  } catch {
+    // Quota exceeded — retry without image fileData
+    try {
+      const trimmed: LessonDraft = {
+        ...draft,
+        materials: draft.materials.map((m) =>
+          m.type === "image" ? { ...m, fileData: undefined } : m
+        ),
+      }
+      localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(trimmed))
+    } catch {
+      // give up silently
+    }
+  }
+}
+
+function clearDraft() {
+  localStorage.removeItem(DRAFT_STORAGE_KEY)
+}
+
 // ─── Main page ──────────────────────────────────────────────────────────────
 
 export default function LessonDesignPage() {
@@ -172,26 +229,35 @@ export default function LessonDesignPage() {
   const { toast } = useToast()
   const { suggest, isLoading: aiLoading, error: aiError, suggestion: aiSuggestion, clearSuggestion } = useLessonAI()
 
+  // 저장된 draft가 있으면 그것을 초기값으로 사용 (없으면 basket·기본값)
+  const [initialDraft] = useState<LessonDraft | null>(() => loadDraft())
+
   const [isGeneratingAll, setIsGeneratingAll] = useState(false)
   const [generatingStep, setGeneratingStep] = useState("")
   const [aiEvalParsed, setAiEvalParsed] = useState<Array<{ domain: string; element: string; methods: string[] }> | null>(null)
 
-  const [title, setTitle] = useState("")
-  const [author, setAuthor] = useState("")
-  const [standards, setStandards] = useState<BasketItem[]>([...basketItems])
-  const [intent, setIntent] = useState("")
-  const [objective, setObjective] = useState("")
-  const [process, setProcess] = useState("")
-  const [useTableMode, setUseTableMode] = useState(false)
-  const [processSteps, setProcessSteps] = useState<LessonProcessStep[]>([
-    { id: genId(), period: "", topic: "", content: "", note: "" },
-  ])
-  const [evaluations, setEvaluations] = useState<EvaluationEntry[]>([
-    { id: genId(), standards: [], domain: "", element: "", methods: [] },
-  ])
-  const [materials, setMaterials] = useState<MaterialEntry[]>([
-    { id: genId(), type: "text", content: "" },
-  ])
+  const [title, setTitle] = useState(initialDraft?.title ?? "")
+  const [author, setAuthor] = useState(initialDraft?.author ?? "")
+  const [standards, setStandards] = useState<BasketItem[]>(initialDraft?.standards ?? [...basketItems])
+  const [intent, setIntent] = useState(initialDraft?.intent ?? "")
+  const [objective, setObjective] = useState(initialDraft?.objective ?? "")
+  const [process, setProcess] = useState(initialDraft?.process ?? "")
+  const [useTableMode, setUseTableMode] = useState(initialDraft?.useTableMode ?? false)
+  const [processSteps, setProcessSteps] = useState<LessonProcessStep[]>(
+    initialDraft?.processSteps?.length
+      ? initialDraft.processSteps
+      : [{ id: genId(), period: "", topic: "", content: "", note: "" }]
+  )
+  const [evaluations, setEvaluations] = useState<EvaluationEntry[]>(
+    initialDraft?.evaluations?.length
+      ? initialDraft.evaluations
+      : [{ id: genId(), standards: [], domain: "", element: "", methods: [] }]
+  )
+  const [materials, setMaterials] = useState<MaterialEntry[]>(
+    initialDraft?.materials?.length
+      ? initialDraft.materials
+      : [{ id: genId(), type: "text", content: "" }]
+  )
 
   const [showSearchDialog, setShowSearchDialog] = useState(false)
   const [showExportMenu, setShowExportMenu] = useState(false)
@@ -200,12 +266,13 @@ export default function LessonDesignPage() {
   const [urlCopied, setUrlCopied] = useState(false)
   const [isUploadingImages, setIsUploadingImages] = useState(false)
   const [showEvalGuide, setShowEvalGuide] = useState(false)
+  const [showResetDialog, setShowResetDialog] = useState(false)
 
   // AI 일괄 생성 옵션 (모두 선택 사항, 주관식)
-  const [aiGrade, setAiGrade] = useState<string>("")
-  const [aiLessonScale, setAiLessonScale] = useState<string>("")
-  const [aiTools, setAiTools] = useState<string>("")
-  const [aiOutputForm, setAiOutputForm] = useState<string>("")
+  const [aiGrade, setAiGrade] = useState<string>(initialDraft?.aiGrade ?? "")
+  const [aiLessonScale, setAiLessonScale] = useState<string>(initialDraft?.aiLessonScale ?? "")
+  const [aiTools, setAiTools] = useState<string>(initialDraft?.aiTools ?? "")
+  const [aiOutputForm, setAiOutputForm] = useState<string>(initialDraft?.aiOutputForm ?? "")
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -238,6 +305,41 @@ export default function LessonDesignPage() {
     cleanUrl.search = ""
     window.history.replaceState(null, "", cleanUrl.toString())
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Autosave draft to localStorage on any change ─────────────────────────
+  useEffect(() => {
+    saveDraft({
+      v: 1,
+      title, author, standards, intent, objective, process,
+      useTableMode, processSteps, evaluations, materials,
+      aiGrade, aiLessonScale, aiTools, aiOutputForm,
+    })
+  }, [title, author, standards, intent, objective, process,
+      useTableMode, processSteps, evaluations, materials,
+      aiGrade, aiLessonScale, aiTools, aiOutputForm])
+
+  // ── 전체 초기화 ─────────────────────────────────────────────────────────
+  const handleResetAll = useCallback(() => {
+    setTitle("")
+    setAuthor("")
+    setStandards([])
+    setIntent("")
+    setObjective("")
+    setProcess("")
+    setUseTableMode(false)
+    setProcessSteps([{ id: genId(), period: "", topic: "", content: "", note: "" }])
+    setEvaluations([{ id: genId(), standards: [], domain: "", element: "", methods: [] }])
+    setMaterials([{ id: genId(), type: "text", content: "" }])
+    setAiGrade("")
+    setAiLessonScale("")
+    setAiTools("")
+    setAiOutputForm("")
+    clearSuggestion()
+    setAiEvalParsed(null)
+    clearDraft()
+    setShowResetDialog(false)
+    toast({ title: "전체 초기화 완료", duration: 2000 })
+  }, [clearSuggestion, toast])
 
   // ── Standards section ───────────────────────────────────────────────────
   const handleSortStandards = useCallback((asc: boolean) => {
@@ -420,8 +522,9 @@ export default function LessonDesignPage() {
 
   const handleSuggestEvaluation = useCallback(() => {
     if (standards.length === 0) { toast({ title: "성취기준을 먼저 추가해주세요.", duration: 2000 }); return }
+    const subjects = Array.from(new Set(standards.map((s) => s.과목).filter(Boolean)))
     withAuth(async () => {
-      const text = await suggest({ standards, intent, objective, process, requestType: "suggest_evaluation", ...aiOptions }, "evaluation")
+      const text = await suggest({ standards, intent, objective, process, subjects, requestType: "suggest_evaluation", ...aiOptions }, "evaluation")
       if (text) {
         const parsed = parseEvalSuggestions(text)
         if (parsed) setAiEvalParsed(parsed)
@@ -475,7 +578,8 @@ export default function LessonDesignPage() {
 
       setGeneratingStep("평가 계획")
       try {
-        const r = await suggestLessonContent({ standards, intent, objective: newObj, process: newProc, requestType: "suggest_evaluation", ...aiOptions })
+        const subjects = Array.from(new Set(standards.map((s) => s.과목).filter(Boolean)))
+        const r = await suggestLessonContent({ standards, intent, objective: newObj, process: newProc, subjects, requestType: "suggest_evaluation", ...aiOptions })
         const parsed = parseEvalSuggestions(r.content)
         if (parsed) setEvaluations(parsed.map((e) => ({ id: genId(), standards: [], domain: e.domain, element: e.element, methods: e.methods })))
       } catch (e) {
@@ -770,11 +874,20 @@ export default function LessonDesignPage() {
   return (
     <div className="max-w-3xl mx-auto p-4 lg:p-6 space-y-6 pb-24">
       {/* Header */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between gap-2">
         <h1 className="text-lg font-semibold flex items-center gap-2">
           <span className="material-icons-outlined text-primary">edit_note</span>
           수업 디자인
         </h1>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowResetDialog(true)}
+          className="h-8 text-xs gap-1 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+        >
+          <span className="material-icons-outlined text-[16px]">restart_alt</span>
+          전체 초기화
+        </Button>
       </div>
 
       {/* Step 1: Title */}
@@ -1515,6 +1628,39 @@ export default function LessonDesignPage() {
             <p className="text-xs text-muted-foreground">
               링크를 열면 동일한 수업 디자인 내용이 복원됩니다.
             </p>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── 전체 초기화 확인 다이얼로그 ── */}
+      <Dialog open={showResetDialog} onOpenChange={setShowResetDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <span className="material-icons-outlined">warning</span>
+              전체 초기화하시겠어요?
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 mt-2 text-sm">
+            <p className="text-foreground/90 leading-relaxed">
+              현재 작성하신 <span className="font-semibold">모든 내용</span>(주제·성취기준·수업자 의도·수업 목표·수업 과정·평가 계획·수업 자료·AI 옵션)이 사라지며 <span className="font-semibold text-destructive">복원할 수 없습니다.</span>
+            </p>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              필요한 내용은 먼저 우측 하단의 <span className="font-medium">JSON 저장</span> 또는 <span className="font-medium">링크 공유</span> 기능으로 백업해 두시는 것을 권장합니다.
+            </p>
+          </div>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="outline" size="sm" onClick={() => setShowResetDialog(false)}>
+              취소
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleResetAll}
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground gap-1"
+            >
+              <span className="material-icons-outlined text-[16px]">restart_alt</span>
+              전체 초기화
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
