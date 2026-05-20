@@ -81,34 +81,74 @@ function trunc(text: string | undefined, len = 400) {
   return text.length > len ? text.slice(0, len) + '…' : text
 }
 
+type LessonOpts = {
+  grade?: string
+  lessonScale?: { min?: number; max?: number }
+  tools?: string[]
+  outputForm?: string
+}
+
+function optionsBlock(opts: LessonOpts): string {
+  const lines: string[] = []
+  if (opts.grade?.trim()) lines.push(`- 대상 학년: ${opts.grade.trim()}`)
+  const min = opts.lessonScale?.min
+  const max = opts.lessonScale?.max
+  if (typeof min === 'number' || typeof max === 'number') {
+    const a = typeof min === 'number' ? `${min}차시` : '제한 없음'
+    const b = typeof max === 'number' ? `${max}차시` : '제한 없음'
+    lines.push(`- 차시 규모: ${a} 이상 ~ ${b} 이하`)
+  }
+  if (opts.tools?.length) lines.push(`- 사용할 디지털 도구: ${opts.tools.join(', ')}`)
+  if (opts.outputForm?.trim()) lines.push(`- 프로젝트 결과물 형태: ${opts.outputForm.trim()}`)
+  if (lines.length === 0) return ''
+  return `\n\n## 수업 설계 옵션 (반드시 반영)\n${lines.join('\n')}`
+}
+
 function buildMessages(body: Record<string, unknown>): Msg[] {
-  const { standards, intent, requestType, objective, process } = body as {
+  const { standards, intent, requestType, objective, process, grade, lessonScale, tools, outputForm } = body as {
     standards: Array<{ 코드: string; 내용: string }>
     intent?: string
     requestType: string
     objective?: string
     process?: string
+    grade?: string
+    lessonScale?: { min?: number; max?: number }
+    tools?: string[]
+    outputForm?: string
   }
   const i = intent?.trim() || '(미작성)'
   const o = objective?.trim()
   const p = process?.trim()
+  const opts: LessonOpts = { grade, lessonScale, tools, outputForm }
+  const optsTxt = optionsBlock(opts)
 
   if (requestType === 'suggest_objective') {
     return [
       { role: 'system', content: SYSTEM },
       {
         role: 'user',
-        content: `아래 성취기준과 수업자 의도를 바탕으로 수업 목표를 2~3개 제안해줘.
+        content: `아래 정보를 종합적으로 분석하여 학생 중심의 수업 목표를 작성해줘.
+
+성취기준은 도달점이지만, 수업 목표는 학생들이 이 수업을 통해 실제로 경험하고 변화할 모습이어야 해.
+성취기준 문장을 그대로 옮기거나 기계적으로 나열하지 말고, 수업자 의도·학년 수준·차시 규모·도구·결과물 형태 등 전체 맥락을 살펴 의미 있는 목표로 통합해서 작성한다.
 
 ## 성취기준
 ${stdText(standards)}
 
 ## 수업자 의도
-${i}${trunc(p) ? `\n\n## 현재 작성된 수업 과정 (참고)\n${trunc(p)}` : ''}
+${i}${optsTxt}${trunc(p) ? `\n\n## 현재 작성된 수업 과정 (참고)\n${trunc(p)}` : ''}
 
-**작성 형식:**
-- 각 목표는 번호를 붙여 "~할 수 있다." 형식으로 끝낼 것
-- 불필요한 설명 없이 목표 목록만 제시`,
+**작성 원칙:**
+- 성취기준의 핵심 능력을 학생 관점에서 재해석하여 진술
+- 단순한 단어 옮김 금지 — 수업자 의도와 결합하여 이 수업만의 고유한 목표로 다듬을 것
+- 지식·기능·태도가 자연스럽게 통합된 형태
+- 학년 수준과 차시 규모에서 실제로 도달 가능한 범위로 설정
+- 디지털 도구·결과물 형태가 주어진 경우 목표 진술에 자연스럽게 반영
+- 목표 수: 2~3개 (수업 규모에 맞춰 조절)
+
+**형식:**
+- 각 목표는 번호(1. 2. 3.)를 붙여 "~할 수 있다." 형식으로 마무리
+- 서두·해설 없이 목표 목록만 출력`,
       },
     ]
   }
@@ -128,7 +168,7 @@ ${stdText(standards)}
 ${i}
 
 ## 수업 목표
-${o || '(미작성)'}${procCtx ? `\n\n## 현재 작성된 내용 (참고하되 새롭게 제안)\n${procCtx}` : ''}
+${o || '(미작성)'}${optsTxt}${procCtx ? `\n\n## 현재 작성된 내용 (참고하되 새롭게 제안)\n${procCtx}` : ''}
 
 **출력 형식 — 반드시 아래 구조만 사용. 마크다운 표 절대 사용 금지.**
 
@@ -141,6 +181,8 @@ ${o || '(미작성)'}${procCtx ? `\n\n## 현재 작성된 내용 (참고하되 �
 - 수업 주제는 교사가 칠판에 판서할 수 있는 수준의 짧은 명사형 또는 문장형 제목
 - 내용은 학생 활동 중심으로 구체적이고 행동 동사("~하기")로 마무리
 - 비고는 꼭 필요한 경우만 작성 (도구명, 플랫폼명, 준비물 등)
+- 차시 규모 옵션이 주어진 경우 그 범위 내에서 차시 수를 결정
+- 디지털 도구·결과물 형태가 주어진 경우 적절한 차시에 자연스럽게 배치
 - 모든 차시를 끊기지 않고 완결되게 작성할 것
 - 답변 중간에 절대 자르지 말 것`,
       },

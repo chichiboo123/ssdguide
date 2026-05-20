@@ -16,7 +16,18 @@ export interface StandardItem {
 
 export type RequestType = 'suggest_objective' | 'suggest_process' | 'suggest_evaluation' | 'suggest_intent_edit'
 
-export interface LessonAIRequest {
+export interface LessonAIOptions {
+  /** 대상 학년 (예: "5학년", "5~6학년군") */
+  grade?: string
+  /** 차시 규모 — 최소·최대 차시 수 */
+  lessonScale?: { min?: number; max?: number }
+  /** 사용할 디지털 도구 (다중 선택) */
+  tools?: string[]
+  /** 프로젝트 결과물 형태 */
+  outputForm?: string
+}
+
+export interface LessonAIRequest extends LessonAIOptions {
   standards?: StandardItem[]
   intent: string
   requestType: RequestType

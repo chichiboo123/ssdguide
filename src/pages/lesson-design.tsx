@@ -9,6 +9,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { AchievementFilterPanel } from "@/components/achievement-filter-panel"
 import { useBasket } from "@/hooks/use-basket"
 import { useToast } from "@/hooks/use-toast"
@@ -28,6 +35,41 @@ const EVAL_METHODS = [
   "논술형", "서술형", "정의적 능력 평가", "협력적 문제해결력 평가",
   "구술", "발표", "실기", "토의･토론", "실험･실습",
   "보고서법", "프로젝트", "포트폴리오", "자기평가", "동료평가",
+]
+
+const GRADE_OPTIONS = [
+  "1학년", "2학년", "3학년", "4학년", "5학년", "6학년",
+  "1~2학년군", "3~4학년군", "5~6학년군",
+]
+
+const DIGITAL_TOOLS = [
+  "생성형 AI(ChatGPT 등)", "Canva", "미리캔버스", "패들렛(Padlet)",
+  "멘티미터(Mentimeter)", "카훗(Kahoot)", "구글 어스/지도", "구글 슬라이드/문서",
+  "잼보드(Jamboard)", "엔트리/스크래치", "AI 그림 생성기", "AR/VR 도구",
+  "영상 편집(CapCut 등)", "북크리에이터",
+]
+
+const OUTPUT_FORMS = [
+  "발표 자료(슬라이드)", "영상(소개·다큐)", "포스터·인포그래픽",
+  "카드뉴스·리플릿", "보고서·글", "작품·예술 작품", "캠페인 활동",
+  "책·그림책", "학급 전시", "모형·만들기",
+]
+
+const EVAL_METHOD_GUIDE: Array<{ name: string; desc: string }> = [
+  { name: "논술형", desc: "주어진 내용이나 주제에 대해서 학생이 논리적으로 사고하면서 문제를 해결하는 과정을 쓰도록 하여 설득력, 이해력, 표현력, 창의력 등을 평가하기 위해 활용하는 방법" },
+  { name: "서술형", desc: "학생들이 주어진 문제에 대해 가지고 있는 지식이나 개념, 원리, 의견 등을 작성하도록 하는 평가 방법" },
+  { name: "정의적 능력 평가", desc: "설문지, 글쓰기, 관찰 및 면담 등 다양한 방법으로 학생들의 정의적 능력(자아개념, 가치관, 흥미, 동기 등)에 대한 확인을 통하여 학생을 종합적으로 지원해 줄 수 있는 평가 방법" },
+  { name: "협력적 문제해결력 평가", desc: "교육과정-수업-평가를 통하여 협력적 문제해결력이 함양될 수 있도록 설계하며, 학생이 다른 사람과 생각을 공유하고 협력해서 문제를 해결하는 경험을 할 수 있는 과정에서 자연스럽게 평가하는 방법" },
+  { name: "구술", desc: "특정 내용이나 주제에 대해서 자신의 의견이나 생각을 말하도록 하여 준비도, 이해력, 표현력, 의사소통 능력 등을 직접 평가하기 위해 활용하는 방법" },
+  { name: "발표", desc: "학생이 미리 준비한 자료를 바탕으로 말하도록 하여 발표 자료, 내용, 기술 등을 평가하는 방법" },
+  { name: "실기", desc: "학생들의 지식이나 기능을 직접 행동으로 나타내도록 하는 평가. 과거의 실기시험과는 달리 자연스러운 상황에서 실제로 하는 것을 관찰하여 수행 능력을 평가하는 방법" },
+  { name: "토의･토론", desc: "토의는 특정 주제나 문제에 대해 서로 의견을 제시하고 대안이나 결정하는 과정을, 토론은 각자의 의견을 제시하며 상대를 설득하는 과정을 평가하는 방법" },
+  { name: "실험･실습", desc: "학생이 실험·실습을 하고 그 과정이나 결과에 대한 보고서를 제출하면, 학생의 수행 과정에서 교사가 관찰한 내용과 제출한 보고서를 종합적으로 평가하는 방법" },
+  { name: "보고서법", desc: "학생의 능력이나 흥미에 적합한 주제를 선택하여 그 주제에 대해서 자료를 수집하고 분석·종합하여 보고서로 작성하도록 하여 평가하는 방법" },
+  { name: "프로젝트", desc: "특정한 연구나 산출물 개발을 수행하도록 한 다음, 프로젝트의 전 과정과 결과물을 종합적으로 평가하기 위해 활용하는 방법" },
+  { name: "포트폴리오", desc: "학생이 직접 쓰거나 만든 작품을 지속적이면서도 체계적으로 모아 둔 작품집 등을 대상으로 한 평가 방법. 미술과 이외에도 국어과 쓰기 영역 등에서 학생의 지속적인 수행 과정과 성장 과정을 평가할 수 있는 방법" },
+  { name: "자기평가", desc: "학습이나 과제 수행 과정에서 학생이 스스로 자신의 능력, 특성, 성취 수준 등을 평가하는 방법" },
+  { name: "동료평가", desc: "학습 과정이나 수행 과정에서 학생들 간에 서로를 평가하는 방법" },
 ]
 
 /** Convert old-format evaluation entries to new format (migration fallback) */
@@ -182,6 +224,14 @@ export default function LessonDesignPage() {
   const [shareUrl, setShareUrl] = useState("")
   const [urlCopied, setUrlCopied] = useState(false)
   const [isUploadingImages, setIsUploadingImages] = useState(false)
+  const [showEvalGuide, setShowEvalGuide] = useState(false)
+
+  // AI 일괄 생성 옵션 (모두 선택 사항)
+  const [aiGrade, setAiGrade] = useState<string>("")
+  const [aiLessonMin, setAiLessonMin] = useState<string>("")
+  const [aiLessonMax, setAiLessonMax] = useState<string>("")
+  const [aiTools, setAiTools] = useState<string[]>([])
+  const [aiOutputForm, setAiOutputForm] = useState<string>("")
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -364,6 +414,24 @@ export default function LessonDesignPage() {
     setPwDialog({ open: false, error: null })
   }, [])
 
+  // AI 옵션을 요청 페이로드로 변환
+  const aiOptions = useMemo(() => {
+    const min = aiLessonMin.trim() ? Number(aiLessonMin) : undefined
+    const max = aiLessonMax.trim() ? Number(aiLessonMax) : undefined
+    return {
+      grade: aiGrade || undefined,
+      lessonScale: (typeof min === 'number' && !Number.isNaN(min)) || (typeof max === 'number' && !Number.isNaN(max))
+        ? { min: Number.isNaN(min as number) ? undefined : min, max: Number.isNaN(max as number) ? undefined : max }
+        : undefined,
+      tools: aiTools.length > 0 ? aiTools : undefined,
+      outputForm: aiOutputForm || undefined,
+    }
+  }, [aiGrade, aiLessonMin, aiLessonMax, aiTools, aiOutputForm])
+
+  const toggleAiTool = useCallback((tool: string) => {
+    setAiTools((prev) => prev.includes(tool) ? prev.filter((t) => t !== tool) : [...prev, tool])
+  }, [])
+
   // ── AI suggestion handlers ───────────────────────────────────────────────
   const handlePolishIntent = useCallback(() => {
     if (!intent.trim()) { toast({ title: "수업자 의도를 먼저 작성해주세요.", duration: 2000 }); return }
@@ -375,27 +443,27 @@ export default function LessonDesignPage() {
   const handleSuggestObjective = useCallback(() => {
     if (standards.length === 0) { toast({ title: "성취기준을 먼저 추가해주세요.", duration: 2000 }); return }
     withAuth(async () => {
-      await suggest({ standards, intent, process, requestType: "suggest_objective" }, "objective")
+      await suggest({ standards, intent, process, requestType: "suggest_objective", ...aiOptions }, "objective")
     })
-  }, [standards, intent, process, suggest, toast, withAuth])
+  }, [standards, intent, process, suggest, toast, withAuth, aiOptions])
 
   const handleSuggestProcess = useCallback(() => {
     if (standards.length === 0) { toast({ title: "성취기준을 먼저 추가해주세요.", duration: 2000 }); return }
     withAuth(async () => {
-      await suggest({ standards, intent, objective, process, requestType: "suggest_process" }, "process")
+      await suggest({ standards, intent, objective, process, requestType: "suggest_process", ...aiOptions }, "process")
     })
-  }, [standards, intent, objective, process, suggest, toast, withAuth])
+  }, [standards, intent, objective, process, suggest, toast, withAuth, aiOptions])
 
   const handleSuggestEvaluation = useCallback(() => {
     if (standards.length === 0) { toast({ title: "성취기준을 먼저 추가해주세요.", duration: 2000 }); return }
     withAuth(async () => {
-      const text = await suggest({ standards, intent, objective, process, requestType: "suggest_evaluation" }, "evaluation")
+      const text = await suggest({ standards, intent, objective, process, requestType: "suggest_evaluation", ...aiOptions }, "evaluation")
       if (text) {
         const parsed = parseEvalSuggestions(text)
         if (parsed) setAiEvalParsed(parsed)
       }
     })
-  }, [standards, intent, objective, process, suggest, toast, withAuth])
+  }, [standards, intent, objective, process, suggest, toast, withAuth, aiOptions])
 
   const applyAiSuggestion = useCallback(() => {
     if (!aiSuggestion) return
@@ -423,7 +491,7 @@ export default function LessonDesignPage() {
     try {
       setGeneratingStep("수업 목표")
       try {
-        const r = await suggestLessonContent({ standards, intent, process, requestType: "suggest_objective" })
+        const r = await suggestLessonContent({ standards, intent, process, requestType: "suggest_objective", ...aiOptions })
         newObj = r.content
         setObjective(newObj)
       } catch (e) {
@@ -433,7 +501,7 @@ export default function LessonDesignPage() {
 
       setGeneratingStep("수업 과정")
       try {
-        const r = await suggestLessonContent({ standards, intent, objective: newObj, process, requestType: "suggest_process" })
+        const r = await suggestLessonContent({ standards, intent, objective: newObj, process, requestType: "suggest_process", ...aiOptions })
         newProc = r.content
         setProcess(newProc)
       } catch (e) {
@@ -443,7 +511,7 @@ export default function LessonDesignPage() {
 
       setGeneratingStep("평가 계획")
       try {
-        const r = await suggestLessonContent({ standards, intent, objective: newObj, process: newProc, requestType: "suggest_evaluation" })
+        const r = await suggestLessonContent({ standards, intent, objective: newObj, process: newProc, requestType: "suggest_evaluation", ...aiOptions })
         const parsed = parseEvalSuggestions(r.content)
         if (parsed) setEvaluations(parsed.map((e) => ({ id: genId(), standards: [], domain: e.domain, element: e.element, methods: e.methods })))
       } catch (e) {
@@ -456,7 +524,7 @@ export default function LessonDesignPage() {
       setIsGeneratingAll(false)
       setGeneratingStep("")
     }
-  }, [standards, intent, objective, process, clearSuggestion, toast])
+  }, [standards, intent, objective, process, clearSuggestion, toast, aiOptions])
 
   const handleGenerateAll = useCallback(() => {
     if (standards.length === 0) { toast({ title: "성취기준을 먼저 추가해주세요.", duration: 2000 }); return }
@@ -893,14 +961,108 @@ export default function LessonDesignPage() {
 
       {/* ── AI 일괄 생성 ── */}
       {standards.length > 0 && (
-        <section className="border border-violet-200 rounded-xl p-4 bg-gradient-to-r from-violet-50/70 to-indigo-50/70 space-y-2.5">
+        <section className="border border-violet-200 rounded-xl p-4 bg-gradient-to-r from-violet-50/70 to-indigo-50/70 space-y-3">
           <div className="flex items-start gap-2.5">
             <span className="material-icons-outlined text-violet-600 text-[22px] mt-0.5">auto_awesome</span>
             <div>
               <p className="font-semibold text-sm">AI 일괄 생성</p>
-              <p className="text-xs text-muted-foreground mt-0.5">수업 목표 · 수업 과정 · 평가 계획을 순서대로 한 번에 생성합니다. 성취기준과 수업자 의도를 참고합니다.</p>
+              <p className="text-xs text-muted-foreground mt-0.5">수업 목표 · 수업 과정 · 평가 계획을 순서대로 한 번에 생성합니다. 아래 옵션을 입력하면 더 맞춤형으로 설계됩니다.</p>
             </div>
           </div>
+
+          {/* 옵션 패널 */}
+          <div className="rounded-lg border border-violet-200/70 bg-white/60 p-3 space-y-3">
+            <p className="text-xs font-medium text-violet-700 flex items-center gap-1">
+              <span className="material-icons-outlined text-[14px]">tune</span>
+              설계 옵션 (모두 선택 사항)
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* 대상 학년 */}
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">대상 학년</label>
+                <Select value={aiGrade || "__none"} onValueChange={(v) => setAiGrade(v === "__none" ? "" : v)}>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="선택 안 함" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none">선택 안 함</SelectItem>
+                    {GRADE_OPTIONS.map((g) => (
+                      <SelectItem key={g} value={g}>{g}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* 차시 규모 */}
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">차시 규모</label>
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    type="number"
+                    min={1}
+                    value={aiLessonMin}
+                    onChange={(e) => setAiLessonMin(e.target.value)}
+                    placeholder="최소"
+                    className="h-8 text-xs"
+                  />
+                  <span className="text-xs text-muted-foreground shrink-0">차시 이상</span>
+                  <span className="text-xs text-muted-foreground">~</span>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={aiLessonMax}
+                    onChange={(e) => setAiLessonMax(e.target.value)}
+                    placeholder="최대"
+                    className="h-8 text-xs"
+                  />
+                  <span className="text-xs text-muted-foreground shrink-0">차시 이하</span>
+                </div>
+              </div>
+
+              {/* 결과물 형태 */}
+              <div className="space-y-1 sm:col-span-2">
+                <label className="text-xs text-muted-foreground">프로젝트 결과물 형태</label>
+                <Select value={aiOutputForm || "__none"} onValueChange={(v) => setAiOutputForm(v === "__none" ? "" : v)}>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="선택 안 함" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none">선택 안 함</SelectItem>
+                    {OUTPUT_FORMS.map((o) => (
+                      <SelectItem key={o} value={o}>{o}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* 디지털 도구 */}
+            <div className="space-y-1.5">
+              <label className="text-xs text-muted-foreground">사용할 디지털 도구 (복수 선택)</label>
+              <div className="flex flex-wrap gap-1.5">
+                {DIGITAL_TOOLS.map((tool) => {
+                  const active = aiTools.includes(tool)
+                  return (
+                    <button
+                      key={tool}
+                      type="button"
+                      onClick={() => toggleAiTool(tool)}
+                      className={cn(
+                        "text-xs px-2 py-1 rounded-full border transition-colors",
+                        active
+                          ? "bg-violet-600 text-white border-violet-600"
+                          : "bg-white text-foreground/70 border-border hover:border-violet-300 hover:text-violet-700"
+                      )}
+                    >
+                      {tool}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+
           <div className="flex items-center gap-3 flex-wrap">
             <Button
               size="sm"
@@ -1110,6 +1272,16 @@ export default function LessonDesignPage() {
                 {aiLoading && aiSuggestion?.section === "evaluation" ? "autorenew" : "auto_awesome"}
               </span>
               AI 재생성
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowEvalGuide(true)}
+              className="h-7 w-7 p-0"
+              title="평가 방법 가이드"
+              aria-label="평가 방법 가이드 열기"
+            >
+              <span className="material-icons-outlined text-[16px]">menu_book</span>
             </Button>
             <Button variant="outline" size="sm" onClick={addEval}>
               <span className="material-icons-outlined text-[16px]">add</span>
@@ -1425,6 +1597,37 @@ export default function LessonDesignPage() {
             </div>
             <p className="text-xs text-muted-foreground">
               링크를 열면 동일한 수업 디자인 내용이 복원됩니다.
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── 평가 방법 가이드 다이얼로그 ── */}
+      <Dialog open={showEvalGuide} onOpenChange={setShowEvalGuide}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col p-0">
+          <DialogHeader className="p-5 pb-3 border-b shrink-0">
+            <DialogTitle className="flex items-center gap-2">
+              <span className="material-icons-outlined text-violet-600">menu_book</span>
+              평가 방법 가이드
+            </DialogTitle>
+            <p className="text-xs text-muted-foreground mt-1">2022 개정 교육과정에서 활용되는 14가지 평가 방법의 정의입니다.</p>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto p-5 pt-3 space-y-2.5">
+            {EVAL_METHOD_GUIDE.map((m) => (
+              <div key={m.name} className="text-sm leading-relaxed">
+                <span className="font-semibold text-violet-700">• {m.name}</span>{" "}
+                <span className="text-foreground/85">{m.desc}</span>
+              </div>
+            ))}
+            <div className="mt-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs leading-relaxed text-amber-900">
+              <span className="font-semibold">★ 자기평가 · 동료평가에 대한 안내</span>
+              <p className="mt-1">
+                자기평가와 동료평가는 학생들이 스스로 학습의 과정을 성찰하고, 함께 성장할 수 있도록 하는 의미 있는 평가 방법입니다.
+                다만 초등학교에서는 자기평가와 동료평가의 결과를 그대로 활용하기보다는, 교사와 학생이 함께 학습의 과정과 결과를 종합적으로 성찰하는 하나의 과정으로 활용하는 것이 권장됩니다.
+              </p>
+            </div>
+            <p className="mt-3 text-[11px] text-muted-foreground border-t pt-3">
+              <span className="font-medium">출처:</span> 2026학년도 초등학교 5~6학년 1~2학기 수업-평가 계획 예시자료 / 경기도교육청, 2026년 2월
             </p>
           </div>
         </DialogContent>
