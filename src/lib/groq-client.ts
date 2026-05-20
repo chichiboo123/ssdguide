@@ -17,12 +17,12 @@ export interface StandardItem {
 export type RequestType = 'suggest_objective' | 'suggest_process' | 'suggest_evaluation' | 'suggest_intent_edit'
 
 export interface LessonAIOptions {
-  /** 대상 학년 (예: "5학년", "5~6학년군") */
+  /** 대상 학년 (예: "5학년") */
   grade?: string
-  /** 차시 규모 — 최소·최대 차시 수 */
-  lessonScale?: { min?: number; max?: number }
-  /** 사용할 디지털 도구 (다중 선택) */
-  tools?: string[]
+  /** 차시 규모 (예: "4~6차시") */
+  lessonScale?: string
+  /** 사용할 디지털 도구 (예: "ChatGPT, Canva") */
+  tools?: string
   /** 프로젝트 결과물 형태 */
   outputForm?: string
 }
