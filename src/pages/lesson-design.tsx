@@ -9,13 +9,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { AchievementFilterPanel } from "@/components/achievement-filter-panel"
 import { useBasket } from "@/hooks/use-basket"
 import { useToast } from "@/hooks/use-toast"
@@ -35,24 +28,6 @@ const EVAL_METHODS = [
   "논술형", "서술형", "정의적 능력 평가", "협력적 문제해결력 평가",
   "구술", "발표", "실기", "토의･토론", "실험･실습",
   "보고서법", "프로젝트", "포트폴리오", "자기평가", "동료평가",
-]
-
-const GRADE_OPTIONS = [
-  "1학년", "2학년", "3학년", "4학년", "5학년", "6학년",
-  "1~2학년군", "3~4학년군", "5~6학년군",
-]
-
-const DIGITAL_TOOLS = [
-  "생성형 AI(ChatGPT 등)", "Canva", "미리캔버스", "패들렛(Padlet)",
-  "멘티미터(Mentimeter)", "카훗(Kahoot)", "구글 어스/지도", "구글 슬라이드/문서",
-  "잼보드(Jamboard)", "엔트리/스크래치", "AI 그림 생성기", "AR/VR 도구",
-  "영상 편집(CapCut 등)", "북크리에이터",
-]
-
-const OUTPUT_FORMS = [
-  "발표 자료(슬라이드)", "영상(소개·다큐)", "포스터·인포그래픽",
-  "카드뉴스·리플릿", "보고서·글", "작품·예술 작품", "캠페인 활동",
-  "책·그림책", "학급 전시", "모형·만들기",
 ]
 
 const EVAL_METHOD_GUIDE: Array<{ name: string; desc: string }> = [
@@ -226,11 +201,10 @@ export default function LessonDesignPage() {
   const [isUploadingImages, setIsUploadingImages] = useState(false)
   const [showEvalGuide, setShowEvalGuide] = useState(false)
 
-  // AI 일괄 생성 옵션 (모두 선택 사항)
+  // AI 일괄 생성 옵션 (모두 선택 사항, 주관식)
   const [aiGrade, setAiGrade] = useState<string>("")
-  const [aiLessonMin, setAiLessonMin] = useState<string>("")
-  const [aiLessonMax, setAiLessonMax] = useState<string>("")
-  const [aiTools, setAiTools] = useState<string[]>([])
+  const [aiLessonScale, setAiLessonScale] = useState<string>("")
+  const [aiTools, setAiTools] = useState<string>("")
   const [aiOutputForm, setAiOutputForm] = useState<string>("")
 
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -415,22 +389,12 @@ export default function LessonDesignPage() {
   }, [])
 
   // AI 옵션을 요청 페이로드로 변환
-  const aiOptions = useMemo(() => {
-    const min = aiLessonMin.trim() ? Number(aiLessonMin) : undefined
-    const max = aiLessonMax.trim() ? Number(aiLessonMax) : undefined
-    return {
-      grade: aiGrade || undefined,
-      lessonScale: (typeof min === 'number' && !Number.isNaN(min)) || (typeof max === 'number' && !Number.isNaN(max))
-        ? { min: Number.isNaN(min as number) ? undefined : min, max: Number.isNaN(max as number) ? undefined : max }
-        : undefined,
-      tools: aiTools.length > 0 ? aiTools : undefined,
-      outputForm: aiOutputForm || undefined,
-    }
-  }, [aiGrade, aiLessonMin, aiLessonMax, aiTools, aiOutputForm])
-
-  const toggleAiTool = useCallback((tool: string) => {
-    setAiTools((prev) => prev.includes(tool) ? prev.filter((t) => t !== tool) : [...prev, tool])
-  }, [])
+  const aiOptions = useMemo(() => ({
+    grade: aiGrade.trim() || undefined,
+    lessonScale: aiLessonScale.trim() || undefined,
+    tools: aiTools.trim() || undefined,
+    outputForm: aiOutputForm.trim() || undefined,
+  }), [aiGrade, aiLessonScale, aiTools, aiOutputForm])
 
   // ── AI suggestion handlers ───────────────────────────────────────────────
   const handlePolishIntent = useCallback(() => {
@@ -971,94 +935,47 @@ export default function LessonDesignPage() {
           </div>
 
           {/* 옵션 패널 */}
-          <div className="rounded-lg border border-violet-200/70 bg-white/60 p-3 space-y-3">
+          <div className="rounded-lg border border-violet-200/70 bg-white/60 p-3 space-y-2.5">
             <p className="text-xs font-medium text-violet-700 flex items-center gap-1">
               <span className="material-icons-outlined text-[14px]">tune</span>
               설계 옵션 (모두 선택 사항)
             </p>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {/* 대상 학년 */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <div className="space-y-1">
                 <label className="text-xs text-muted-foreground">대상 학년</label>
-                <Select value={aiGrade || "__none"} onValueChange={(v) => setAiGrade(v === "__none" ? "" : v)}>
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue placeholder="선택 안 함" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none">선택 안 함</SelectItem>
-                    {GRADE_OPTIONS.map((g) => (
-                      <SelectItem key={g} value={g}>{g}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Input
+                  value={aiGrade}
+                  onChange={(e) => setAiGrade(e.target.value)}
+                  placeholder="예: 5학년, 5~6학년군"
+                  className="h-8 text-xs"
+                />
               </div>
-
-              {/* 차시 규모 */}
               <div className="space-y-1">
                 <label className="text-xs text-muted-foreground">차시 규모</label>
-                <div className="flex items-center gap-1.5">
-                  <Input
-                    type="number"
-                    min={1}
-                    value={aiLessonMin}
-                    onChange={(e) => setAiLessonMin(e.target.value)}
-                    placeholder="최소"
-                    className="h-8 text-xs"
-                  />
-                  <span className="text-xs text-muted-foreground shrink-0">차시 이상</span>
-                  <span className="text-xs text-muted-foreground">~</span>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={aiLessonMax}
-                    onChange={(e) => setAiLessonMax(e.target.value)}
-                    placeholder="최대"
-                    className="h-8 text-xs"
-                  />
-                  <span className="text-xs text-muted-foreground shrink-0">차시 이하</span>
-                </div>
+                <Input
+                  value={aiLessonScale}
+                  onChange={(e) => setAiLessonScale(e.target.value)}
+                  placeholder="예: 4~6차시"
+                  className="h-8 text-xs"
+                />
               </div>
-
-              {/* 결과물 형태 */}
-              <div className="space-y-1 sm:col-span-2">
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">사용할 디지털 도구</label>
+                <Input
+                  value={aiTools}
+                  onChange={(e) => setAiTools(e.target.value)}
+                  placeholder="예: ChatGPT, Canva, 패들렛"
+                  className="h-8 text-xs"
+                />
+              </div>
+              <div className="space-y-1">
                 <label className="text-xs text-muted-foreground">프로젝트 결과물 형태</label>
-                <Select value={aiOutputForm || "__none"} onValueChange={(v) => setAiOutputForm(v === "__none" ? "" : v)}>
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue placeholder="선택 안 함" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none">선택 안 함</SelectItem>
-                    {OUTPUT_FORMS.map((o) => (
-                      <SelectItem key={o} value={o}>{o}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* 디지털 도구 */}
-            <div className="space-y-1.5">
-              <label className="text-xs text-muted-foreground">사용할 디지털 도구 (복수 선택)</label>
-              <div className="flex flex-wrap gap-1.5">
-                {DIGITAL_TOOLS.map((tool) => {
-                  const active = aiTools.includes(tool)
-                  return (
-                    <button
-                      key={tool}
-                      type="button"
-                      onClick={() => toggleAiTool(tool)}
-                      className={cn(
-                        "text-xs px-2 py-1 rounded-full border transition-colors",
-                        active
-                          ? "bg-violet-600 text-white border-violet-600"
-                          : "bg-white text-foreground/70 border-border hover:border-violet-300 hover:text-violet-700"
-                      )}
-                    >
-                      {tool}
-                    </button>
-                  )
-                })}
+                <Input
+                  value={aiOutputForm}
+                  onChange={(e) => setAiOutputForm(e.target.value)}
+                  placeholder="예: 영상, 포스터, 카드뉴스"
+                  className="h-8 text-xs"
+                />
               </div>
             </div>
           </div>

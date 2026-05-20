@@ -83,22 +83,16 @@ function trunc(text: string | undefined, len = 400) {
 
 type LessonOpts = {
   grade?: string
-  lessonScale?: { min?: number; max?: number }
-  tools?: string[]
+  lessonScale?: string
+  tools?: string
   outputForm?: string
 }
 
 function optionsBlock(opts: LessonOpts): string {
   const lines: string[] = []
   if (opts.grade?.trim()) lines.push(`- 대상 학년: ${opts.grade.trim()}`)
-  const min = opts.lessonScale?.min
-  const max = opts.lessonScale?.max
-  if (typeof min === 'number' || typeof max === 'number') {
-    const a = typeof min === 'number' ? `${min}차시` : '제한 없음'
-    const b = typeof max === 'number' ? `${max}차시` : '제한 없음'
-    lines.push(`- 차시 규모: ${a} 이상 ~ ${b} 이하`)
-  }
-  if (opts.tools?.length) lines.push(`- 사용할 디지털 도구: ${opts.tools.join(', ')}`)
+  if (opts.lessonScale?.trim()) lines.push(`- 차시 규모: ${opts.lessonScale.trim()}`)
+  if (opts.tools?.trim()) lines.push(`- 사용할 디지털 도구: ${opts.tools.trim()}`)
   if (opts.outputForm?.trim()) lines.push(`- 프로젝트 결과물 형태: ${opts.outputForm.trim()}`)
   if (lines.length === 0) return ''
   return `\n\n## 수업 설계 옵션 (반드시 반영)\n${lines.join('\n')}`
@@ -112,8 +106,8 @@ function buildMessages(body: Record<string, unknown>): Msg[] {
     objective?: string
     process?: string
     grade?: string
-    lessonScale?: { min?: number; max?: number }
-    tools?: string[]
+    lessonScale?: string
+    tools?: string
     outputForm?: string
   }
   const i = intent?.trim() || '(미작성)'
