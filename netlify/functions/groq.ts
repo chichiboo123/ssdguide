@@ -98,8 +98,41 @@ function optionsBlock(opts: LessonOpts): string {
   return `\n\n## 수업 설계 옵션 (반드시 반영)\n${lines.join('\n')}`
 }
 
+// 교과별 공식 평가영역 (2022 개정 교육과정)
+const DOMAINS_BY_SUBJECT: Record<string, string[]> = {
+  '국어': ['듣기·말하기', '읽기', '쓰기', '문법', '문학', '매체'],
+  '사회': [
+    '지리-지리인식', '지리-자연환경과 인간생활', '지리-인문환경과 인간생활',
+    '지리-지속가능한 세계', '역사-한국사',
+    '일반사회-정치', '일반사회-법', '일반사회-경제', '일반사회-사회·문화',
+  ],
+  '수학': ['수와 연산', '도형과 측정', '변화와 관계', '자료와 가능성'],
+  '과학': ['운동과 에너지', '물질', '생명', '지구와 우주', '과학과 사회'],
+  '도덕': ['자신과의 관계', '타인과의 관계', '사회·공동체와의 관계', '자연과의 관계'],
+  '체육': ['운동', '스포츠', '표현'],
+  '음악': ['연주', '감상', '창작'],
+  '미술': ['미적체험', '표현', '감상'],
+  '영어': ['이해', '표현'],
+  '실과': [
+    '인간 발달과 주도적 삶', '생활환경과 지속가능한 선택',
+    '기술적 문제해결과 혁신', '지속가능한 기술과 융합',
+    '디지털 사회와 인공지능',
+  ],
+}
+
+function buildDomainCatalog(subjects: string[] | undefined): string {
+  const entries = subjects?.length
+    ? subjects.filter((s) => DOMAINS_BY_SUBJECT[s]).map((s) => [s, DOMAINS_BY_SUBJECT[s]] as const)
+    : Object.entries(DOMAINS_BY_SUBJECT)
+  if (entries.length === 0) {
+    // 매핑되지 않는 교과 — 그대로 노출하여 모델이 활용
+    return subjects?.length ? `\n(참고: 이 수업의 교과 — ${subjects.join(', ')})` : ''
+  }
+  return entries.map(([sub, doms]) => `- ${sub}: ${doms.join(' / ')}`).join('\n')
+}
+
 function buildMessages(body: Record<string, unknown>): Msg[] {
-  const { standards, intent, requestType, objective, process, grade, lessonScale, tools, outputForm } = body as {
+  const { standards, intent, requestType, objective, process, grade, lessonScale, tools, outputForm, subjects } = body as {
     standards: Array<{ 코드: string; 내용: string }>
     intent?: string
     requestType: string
@@ -109,6 +142,7 @@ function buildMessages(body: Record<string, unknown>): Msg[] {
     lessonScale?: string
     tools?: string
     outputForm?: string
+    subjects?: string[]
   }
   const i = intent?.trim() || '(미작성)'
   const o = objective?.trim()
@@ -207,6 +241,12 @@ ${intent}`,
   }
 
   if (requestType === 'suggest_evaluation') {
+    const subjectScope = subjects?.length
+      ? `\n## 이 수업의 교과 (성취기준 코드로부터 추출)
+${subjects.join(', ')}
+
+**중요: 평가영역(domain)은 반드시 위 교과의 공식 영역 중에서만 선택해야 한다. 다른 교과의 영역을 절대 사용하지 말 것.**\n`
+      : ''
     return [
       { role: 'system', content: SYSTEM },
       {
@@ -215,7 +255,7 @@ ${intent}`,
 
 ## 성취기준
 ${stdText(standards)}
-
+${subjectScope}
 ## 수업자 의도
 ${i}
 
@@ -224,22 +264,8 @@ ${o || '(미작성)'}${trunc(p) ? `\n\n## 수업 과정 (참고)\n${trunc(p)}` :
 
 **평가 설계 원칙 (2026 초등학교 5~6학년 수업-평가 계획 예시자료 기준):**
 
-[평가영역]
-교과별 공식 영역명을 사용한다.
-- 국어: 듣기·말하기 / 읽기 / 쓰기 / 문법 / 문학 / 매체
-- 사회: 지리-지리인식 / 지리-자연환경과 인간생활 / 지리-인문환경과 인간생활 /
-        지리-지속가능한 세계 / 역사-한국사 / 일반사회-정치 / 일반사회-법 /
-        일반사회-경제 / 일반사회-사회·문화
-- 수학: 수와 연산 / 도형과 측정 / 변화와 관계 / 자료와 가능성
-- 과학: 운동과 에너지 / 물질 / 생명 / 지구와 우주 / 과학과 사회
-- 도덕: 자신과의 관계 / 타인과의 관계 / 사회·공동체와의 관계 / 자연과의 관계
-- 체육: 운동 / 스포츠 / 표현
-- 음악: 연주 / 감상 / 창작
-- 미술: 미적체험 / 표현 / 감상
-- 영어: 이해 / 표현
-- 실과: 인간 발달과 주도적 삶 / 생활환경과 지속가능한 선택 /
-        기술적 문제해결과 혁신 / 지속가능한 기술과 융합 /
-        디지털 사회와 인공지능
+[평가영역 — ${subjects?.length ? '이 수업의 교과에 한정된 공식 영역명' : '교과별 공식 영역명'}]
+${buildDomainCatalog(subjects)}
 
 [평가요소]
 성취기준에서 핵심 능력을 추출하여 "~하기" 형태로 서술한다.
