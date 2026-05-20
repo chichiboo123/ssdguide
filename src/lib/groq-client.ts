@@ -14,10 +14,10 @@ export interface StandardItem {
   영역?: string
 }
 
-export type RequestType = 'suggest_objective' | 'suggest_process' | 'suggest_evaluation'
+export type RequestType = 'suggest_objective' | 'suggest_process' | 'suggest_evaluation' | 'suggest_intent_edit'
 
 export interface LessonAIRequest {
-  standards: StandardItem[]
+  standards?: StandardItem[]
   intent: string
   requestType: RequestType
   /** Current objective — passed as context for process/evaluation generation */

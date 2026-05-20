@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react'
 import { suggestLessonContent, type LessonAIRequest } from '@/lib/groq-client'
 
 export interface AISuggestion {
-  section: 'objective' | 'process' | 'evaluation'
+  section: 'objective' | 'process' | 'evaluation' | 'intent'
   text: string
   model: string
 }
