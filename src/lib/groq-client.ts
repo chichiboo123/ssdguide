@@ -44,6 +44,26 @@ export interface LessonAIResponse {
   model: string
 }
 
+async function readApiResponse(res: Response): Promise<Partial<LessonAIResponse> & { error?: string }> {
+  const contentType = res.headers.get('content-type') ?? ''
+  if (!contentType.toLowerCase().includes('application/json')) {
+    // An HTML response usually means the hosting platform did not route the
+    // request to the API function. Do not leak its markup as a JSON parse error.
+    await res.body?.cancel()
+    throw new Error(
+      res.status === 404 || res.status === 405
+        ? 'AI API 경로가 서버에 연결되지 않았습니다. 배포 설정을 확인해주세요.'
+        : `AI 서버가 올바르지 않은 응답을 반환했습니다. (HTTP ${res.status})`
+    )
+  }
+
+  try {
+    return await res.json() as Partial<LessonAIResponse> & { error?: string }
+  } catch {
+    throw new Error(`AI 서버 응답을 읽을 수 없습니다. (HTTP ${res.status})`)
+  }
+}
+
 export async function suggestLessonContent(req: LessonAIRequest): Promise<LessonAIResponse> {
   const pw = getStoredAiPassword()
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
@@ -60,11 +80,15 @@ export async function suggestLessonContent(req: LessonAIRequest): Promise<Lesson
     throw new Error('WRONG_PASSWORD')
   }
 
-  const data: { content?: string; model?: string; error?: string } = await res.json()
+  const data = await readApiResponse(res)
 
   if (!res.ok) {
     throw new Error(data.error ?? `AI 요청 실패 (HTTP ${res.status})`)
   }
 
-  return data as LessonAIResponse
+  if (typeof data.content !== 'string' || typeof data.model !== 'string') {
+    throw new Error('AI 서버 응답에 필요한 결과가 없습니다.')
+  }
+
+  return { content: data.content, model: data.model }
 }
