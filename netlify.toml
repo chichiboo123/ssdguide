@@ -9,7 +9,8 @@
 # Rewrite /api/groq/* → Netlify function (no frontend code changes needed)
 [[redirects]]
   from = "/api/groq/*"
-  to = "/.netlify/functions/groq"
+  # Keep the requested API suffix so the function can dispatch the route.
+  to = "/.netlify/functions/groq/:splat"
   status = 200
   force = true
 

@@ -60,6 +60,12 @@ npx tsx server/index.ts
 
 `netlify.toml`이 빌드·배포·API 라우팅을 자동 설정합니다.
 
+이 앱은 AI 요청을 처리하는 서버 함수가 필요하므로 정적 파일만 제공하는
+GitHub Pages에는 배포할 수 없습니다. Netlify 대시보드의 **Add new project >
+Import an existing project**에서 이 GitHub 저장소를 연결하세요. 이후 `main`
+브랜치에 푸시하면 Netlify의 Git 연동이 프론트엔드와 `netlify/functions`를
+함께 배포합니다. 별도의 GitHub Actions 배포 토큰은 필요하지 않습니다.
+
 Netlify 대시보드 → **Site settings > Environment variables** 에서 아래 값을 설정하세요:
 
 | 변수명 | 설명 |
