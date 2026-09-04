@@ -60,6 +60,18 @@ npx tsx server/index.ts
 
 `netlify.toml`이 빌드·배포·API 라우팅을 자동 설정합니다.
 
+이 앱은 AI 요청을 처리하는 서버 함수가 필요하므로 정적 파일만 제공하는
+GitHub Pages에는 배포할 수 없습니다. `main` 브랜치에 푸시하면 GitHub Actions가
+프론트엔드와 `netlify/functions`를 하나의 Netlify 사이트로 함께 배포합니다.
+
+GitHub 저장소의 **Settings > Secrets and variables > Actions**에 아래 secret을
+설정하세요:
+
+| Secret | 설명 |
+|---|---|
+| `NETLIFY_AUTH_TOKEN` | Netlify 사용자 액세스 토큰 |
+| `NETLIFY_SITE_ID` | 배포 대상 Netlify 사이트의 API ID |
+
 Netlify 대시보드 → **Site settings > Environment variables** 에서 아래 값을 설정하세요:
 
 | 변수명 | 설명 |

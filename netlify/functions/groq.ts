@@ -323,7 +323,10 @@ export const handler: Handler = async (event) => {
     return { statusCode: 204, headers: CORS, body: '' }
   }
 
-  const subpath = event.path.replace(/.*\/api\/groq/, '')
+  // Netlify may expose either the original redirect path or the rewritten
+  // function path. Support both forms so the route survives local and hosted
+  // redirect handling.
+  const subpath = event.path.replace(/^.*\/(?:api\/groq|\.netlify\/functions\/groq)/, '') || '/'
 
   if (event.httpMethod === 'GET' && subpath === '/status') {
     const models = MODELS.map((m) => ({
